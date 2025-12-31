@@ -1,0 +1,7 @@
+notes/
+zig-out/
+zig-cache/
+.zig-cache/
+result
+.direnv/
+.envrc
