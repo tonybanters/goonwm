@@ -58,6 +58,9 @@ pub const StructureNotifyMask = c.StructureNotifyMask;
 
 pub const Mod4Mask = c.Mod4Mask;
 pub const ShiftMask = c.ShiftMask;
+pub const LockMask = c.LockMask;
+pub const Mod2Mask = c.Mod2Mask;
+pub const ControlMask = c.ControlMask;
 
 pub const GrabModeAsync = c.GrabModeAsync;
 pub const RevertToPointerRoot = c.RevertToPointerRoot;
@@ -237,3 +240,6 @@ pub const XDestroyWindow = c.XDestroyWindow;
 pub const XGrabServer = c.XGrabServer;
 pub const XUngrabServer = c.XUngrabServer;
 pub const XUngrabButton = c.XUngrabButton;
+pub const XUngrabKey = c.XUngrabKey;
+pub const AnyKey = c.AnyKey;
+pub const AnyModifier = c.AnyModifier;

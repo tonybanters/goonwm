@@ -8,6 +8,8 @@ const tiling = @import("layouts/tiling.zig");
 const monocle = @import("layouts/monocle.zig");
 const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks.zig");
+const config_mod = @import("config/config.zig");
+const scheme_mod = @import("config/scheme.zig");
 
 const Display = display_mod.Display;
 const Client = client_mod.Client;
@@ -33,24 +35,14 @@ var net_client_list: xlib.Atom = 0;
 
 var wm_check_window: xlib.Window = 0;
 
-const border_color_focused: c_ulong = 0x6dade3;
-const border_color_unfocused: c_ulong = 0x444444;
+var border_color_focused: c_ulong = 0x6dade3;
+var border_color_unfocused: c_ulong = 0x444444;
 
-const tags = [_][]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+var tags: [9][]const u8 = .{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
-const Rule = struct {
-    class: ?[]const u8,
-    instance: ?[]const u8,
-    title: ?[]const u8,
-    tags: u32,
-    is_floating: bool,
-    monitor: i32,
-};
-
-const rules = [_]Rule{
-    .{ .class = "Gimp", .instance = null, .title = null, .tags = 0, .is_floating = true, .monitor = -1 },
-    .{ .class = "Firefox", .instance = null, .title = null, .tags = 1 << 8, .is_floating = false, .monitor = -1 },
-};
+var config: config_mod.Config = undefined;
+var display_global: ?*Display = null;
+var config_path_global: ?[]const u8 = null;
 
 pub fn main() !void {
     const allocator = gpa.allocator();
@@ -58,11 +50,52 @@ pub fn main() !void {
 
     std.debug.print("goonwm starting\n", .{});
 
+    var config_path: ?[]const u8 = null;
+    var args = std.process.args();
+    _ = args.skip();
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "-c") or std.mem.eql(u8, arg, "--config")) {
+            config_path = args.next();
+        } else if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
+            std.debug.print("usage: goonwm [-c config.scm]\n", .{});
+            return;
+        }
+    }
+
+    config = config_mod.Config.init(allocator);
+    defer config.deinit();
+    config_mod.set_config(&config);
+
+    if (scheme_mod.init(&config)) {
+        const loaded = if (config_path) |path|
+            scheme_mod.load_file(path)
+        else
+            scheme_mod.load_config();
+
+        if (loaded) {
+            config_path_global = config_path;
+            if (config_path) |path| {
+                std.debug.print("loaded config from {s}\n", .{path});
+            } else {
+                std.debug.print("loaded config from ~/.config/goonwm/config.scm\n", .{});
+            }
+            apply_config_values();
+        } else {
+            std.debug.print("no config found, using defaults\n", .{});
+            setup_default_keybinds();
+        }
+    } else {
+        std.debug.print("failed to init scheme, using defaults\n", .{});
+        setup_default_keybinds();
+    }
+
     var display = Display.open() catch |err| {
         std.debug.print("failed to open display: {}\n", .{err});
         return;
     };
     defer display.close();
+
+    display_global = &display;
 
     std.debug.print("display opened: screen={d} root=0x{x}\n", .{ display.screen, display.root });
     std.debug.print("screen size: {d}x{d}\n", .{ display.screen_width(), display.screen_height() });
@@ -81,12 +114,13 @@ pub fn main() !void {
 
     setup_monitors(&display);
     setup_bars(allocator, &display);
-    setup_keybinds(&display);
+    grab_keybinds(&display);
     scan_existing_windows(&display);
 
     std.debug.print("entering event loop\n", .{});
     run_event_loop(&display);
 
+    scheme_mod.deinit();
     std.debug.print("goonwm exiting\n", .{});
 }
 
@@ -124,7 +158,7 @@ fn setup_atoms(display: *Display) void {
 fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
     var current_monitor = monitor_mod.monitors;
     while (current_monitor) |monitor| {
-        const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, "monospace:size=10");
+        const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, "JetBrainsMono Nerd Font Propo:style=Bold:size=14");
         if (bar) |created_bar| {
             created_bar.add_block(blocks_mod.Block.init_ram("", 5, 0x7aa2f7));
             created_bar.add_block(blocks_mod.Block.init_static(" | ", 0x666666));
@@ -197,40 +231,63 @@ fn setup_monitors(display: *Display) void {
     std.debug.print("monitor created: {d}x{d}\n", .{ mon.mon_w, mon.mon_h });
 }
 
-fn setup_keybinds(display: *Display) void {
-    const mod_key = xlib.Mod4Mask;
-    const alt_key = xlib.Mod1Mask;
+fn apply_config_values() void {
+    border_color_focused = config.border_focused;
+    border_color_unfocused = config.border_unfocused;
+    tags = config.tags;
+}
 
-    display.grab_key(display.keysym_to_keycode(xlib.XK_q), mod_key | xlib.ShiftMask);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_Return), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_q), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_f), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_j), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_k), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_h), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_l), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_i), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_d), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_m), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_comma), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_period), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_comma), alt_key | xlib.ShiftMask);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_period), alt_key | xlib.ShiftMask);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_space), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_p), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_a), alt_key);
-    display.grab_key(display.keysym_to_keycode(xlib.XK_s), alt_key);
+fn setup_default_keybinds() void {
+    const mod_key: u32 = 1 << 6;
+    const shift_key: u32 = 1 << 0;
+    const control_key: u32 = 1 << 2;
 
-    const tag_keys = [_]c_ulong{ xlib.XK_1, xlib.XK_2, xlib.XK_3, xlib.XK_4, xlib.XK_5, xlib.XK_6, xlib.XK_7, xlib.XK_8, xlib.XK_9 };
-    for (tag_keys) |key| {
-        display.grab_key(display.keysym_to_keycode(key), alt_key);
-        display.grab_key(display.keysym_to_keycode(key), alt_key | xlib.ShiftMask);
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 0xff0d, .action = .spawn_terminal }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'd', .action = .spawn, .str_arg = "rofi -show drun" }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 's', .action = .spawn, .str_arg = "maim -s | xclip -selection clipboard -t image/png" }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'q', .action = .kill_client }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 'q', .action = .quit }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 'r', .action = .reload_config }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'j', .action = .focus_next }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'k', .action = .focus_prev }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 'j', .action = .move_next }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 'k', .action = .move_prev }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'h', .action = .resize_master, .int_arg = -50 }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'l', .action = .resize_master, .int_arg = 50 }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'i', .action = .inc_master }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'p', .action = .dec_master }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'a', .action = .toggle_gaps }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 'f', .action = .toggle_fullscreen }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 0x0020, .action = .toggle_floating }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 0x002c, .action = .focus_monitor, .int_arg = -1 }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key, .keysym = 0x002e, .action = .focus_monitor, .int_arg = 1 }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 0x002c, .action = .send_to_monitor, .int_arg = -1 }) catch {};
+    config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = 0x002e, .action = .send_to_monitor, .int_arg = 1 }) catch {};
+
+    var tag_index: i32 = 0;
+    while (tag_index < 9) : (tag_index += 1) {
+        const keysym: u64 = @as(u64, '1') + @as(u64, @intCast(tag_index));
+        config.add_keybind(.{ .mod_mask = mod_key, .keysym = keysym, .action = .view_tag, .int_arg = tag_index }) catch {};
+        config.add_keybind(.{ .mod_mask = mod_key | shift_key, .keysym = keysym, .action = .move_to_tag, .int_arg = tag_index }) catch {};
+        config.add_keybind(.{ .mod_mask = mod_key | control_key, .keysym = keysym, .action = .toggle_view_tag, .int_arg = tag_index }) catch {};
+        config.add_keybind(.{ .mod_mask = mod_key | control_key | shift_key, .keysym = keysym, .action = .toggle_tag, .int_arg = tag_index }) catch {};
     }
+}
+
+fn grab_keybinds(display: *Display) void {
+    for (config.keybinds.items) |keybind| {
+        const keycode = xlib.XKeysymToKeycode(display.handle, @intCast(keybind.keysym));
+        if (keycode != 0) {
+            display.grab_key(keycode, keybind.mod_mask);
+        }
+    }
+
+    const mod_key = xlib.Mod4Mask;
 
     _ = xlib.XGrabButton(
         display.handle,
         xlib.Button1,
-        alt_key,
+        mod_key,
         display.root,
         xlib.True,
         xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
@@ -243,7 +300,7 @@ fn setup_keybinds(display: *Display) void {
     _ = xlib.XGrabButton(
         display.handle,
         xlib.Button3,
-        alt_key,
+        mod_key,
         display.root,
         xlib.True,
         xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
@@ -253,7 +310,7 @@ fn setup_keybinds(display: *Display) void {
         xlib.None,
     );
 
-    std.debug.print("keybinds: mod+shift+q=quit, alt+enter=terminal, alt+q=close, alt+f=fullscreen, alt+j/k=focus, alt+space=float, alt+1-9=view, alt+shift+1-9=tag, alt+mouse1=move, alt+mouse3=resize\n", .{});
+    std.debug.print("grabbed {d} keybinds from config\n", .{config.keybinds.items.len});
 }
 
 fn scan_existing_windows(display: *Display) void {
@@ -437,145 +494,213 @@ fn handle_configure_request(display: *Display, event: *xlib.XConfigureRequestEve
 
 fn handle_key_press(display: *Display, event: *xlib.XKeyEvent) void {
     const keysym = xlib.XKeycodeToKeysym(display.handle, @intCast(event.keycode), 0);
-    const alt_pressed = (event.state & xlib.Mod1Mask) != 0;
-    const shift_pressed = (event.state & xlib.ShiftMask) != 0;
-    const super_pressed = (event.state & xlib.Mod4Mask) != 0;
+    const clean_state = event.state & ~@as(c_uint, xlib.LockMask | xlib.Mod2Mask);
 
-    if (keysym == xlib.XK_q and super_pressed and shift_pressed) {
-        std.debug.print("quit keybind pressed\n", .{});
-        running = false;
-        return;
-    }
-
-    if (keysym == xlib.XK_Return and alt_pressed) {
-        spawn_terminal();
-        return;
-    }
-
-    if (keysym == xlib.XK_q and alt_pressed) {
-        kill_focused(display);
-        return;
-    }
-
-    if (keysym == xlib.XK_f and alt_pressed) {
-        toggle_fullscreen(display);
-        return;
-    }
-
-    if (keysym == xlib.XK_j and alt_pressed) {
-        focusstack(display, 1);
-        return;
-    }
-
-    if (keysym == xlib.XK_k and alt_pressed) {
-        focusstack(display, -1);
-        return;
-    }
-
-    if (keysym == xlib.XK_space and alt_pressed) {
-        toggle_floating(display);
-        return;
-    }
-
-    if (keysym == xlib.XK_h and alt_pressed) {
-        setmfact(-0.05);
-        return;
-    }
-
-    if (keysym == xlib.XK_l and alt_pressed) {
-        setmfact(0.05);
-        return;
-    }
-
-    if (keysym == xlib.XK_i and alt_pressed) {
-        incnmaster(1);
-        return;
-    }
-
-    if (keysym == xlib.XK_d and alt_pressed) {
-        incnmaster(-1);
-        return;
-    }
-
-    if (keysym == xlib.XK_m and alt_pressed) {
-        cycle_layout();
-        return;
-    }
-
-    if (keysym == xlib.XK_p and alt_pressed) {
-        spawn_dmenu();
-        return;
-    }
-
-    if (keysym == xlib.XK_a and alt_pressed) {
-        toggle_gaps();
-        return;
-    }
-
-    if (keysym == xlib.XK_s and alt_pressed) {
-        spawn_screenshot();
-        return;
-    }
-
-    if (keysym == xlib.XK_comma and alt_pressed) {
-        if (shift_pressed) {
-            sendmon(display, -1);
-        } else {
-            focusmon(display, -1);
-        }
-        return;
-    }
-
-    if (keysym == xlib.XK_period and alt_pressed) {
-        if (shift_pressed) {
-            sendmon(display, 1);
-        } else {
-            focusmon(display, 1);
-        }
-        return;
-    }
-
-    const tag_keys = [_]c_ulong{ xlib.XK_1, xlib.XK_2, xlib.XK_3, xlib.XK_4, xlib.XK_5, xlib.XK_6, xlib.XK_7, xlib.XK_8, xlib.XK_9 };
-    for (tag_keys, 0..) |key, index| {
-        if (keysym == key and alt_pressed) {
-            const tag_mask: u32 = @as(u32, 1) << @intCast(index);
-            if (shift_pressed) {
-                tag_client(display, tag_mask);
-            } else {
-                view(display, tag_mask);
-            }
+    for (config.keybinds.items) |keybind| {
+        if (keysym == keybind.keysym and clean_state == keybind.mod_mask) {
+            execute_action(display, keybind.action, keybind.int_arg, keybind.str_arg);
             return;
         }
+    }
+}
+
+fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, str_arg: ?[]const u8) void {
+    switch (action) {
+        .spawn_terminal => spawn_terminal(),
+        .spawn => {
+            if (str_arg) |cmd| {
+                spawn_command(cmd);
+            }
+        },
+        .kill_client => kill_focused(display),
+        .quit => {
+            std.debug.print("quit keybind pressed\n", .{});
+            running = false;
+        },
+        .reload_config => reload_config(display),
+        .restart => {},
+        .focus_next => focusstack(display, 1),
+        .focus_prev => focusstack(display, -1),
+        .move_next => movestack(display, 1),
+        .move_prev => movestack(display, -1),
+        .resize_master => setmfact(@as(f32, @floatFromInt(int_arg)) / 1000.0),
+        .inc_master => incnmaster(1),
+        .dec_master => incnmaster(-1),
+        .toggle_floating => toggle_floating(display),
+        .toggle_fullscreen => toggle_fullscreen(display),
+        .toggle_gaps => toggle_gaps(),
+        .cycle_layout => cycle_layout(),
+        .set_layout_tiling => {},
+        .set_layout_floating => {},
+        .view_tag => {
+            const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
+            view(display, tag_mask);
+        },
+        .move_to_tag => {
+            const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
+            tag_client(display, tag_mask);
+        },
+        .toggle_view_tag => {
+            const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
+            toggle_view(display, tag_mask);
+        },
+        .toggle_tag => {
+            const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
+            toggle_client_tag(display, tag_mask);
+        },
+        .focus_monitor => focusmon(display, int_arg),
+        .send_to_monitor => sendmon(display, int_arg),
+    }
+}
+
+fn reload_config(display: *Display) void {
+    std.debug.print("reloading config...\n", .{});
+
+    ungrab_keybinds(display);
+
+    config.keybinds.clearRetainingCapacity();
+    config.rules.clearRetainingCapacity();
+
+    const loaded = if (config_path_global) |path|
+        scheme_mod.load_file(path)
+    else
+        scheme_mod.load_config();
+
+    if (loaded) {
+        if (config_path_global) |path| {
+            std.debug.print("reloaded config from {s}\n", .{path});
+        } else {
+            std.debug.print("reloaded config from ~/.config/goonwm/config.scm\n", .{});
+        }
+        apply_config_values();
+    } else {
+        std.debug.print("reload failed, restoring defaults\n", .{});
+        setup_default_keybinds();
+    }
+
+    grab_keybinds(display);
+    bar_mod.invalidate_bars();
+}
+
+fn ungrab_keybinds(display: *Display) void {
+    _ = xlib.XUngrabKey(display.handle, xlib.AnyKey, xlib.AnyModifier, display.root);
+}
+
+fn spawn_command(cmd: []const u8) void {
+    const pid = std.posix.fork() catch return;
+    if (pid == 0) {
+        var cmd_buf: [1024]u8 = undefined;
+        if (cmd.len >= cmd_buf.len) {
+            std.posix.exit(1);
+        }
+        @memcpy(cmd_buf[0..cmd.len], cmd);
+        cmd_buf[cmd.len] = 0;
+        const argv = [_:null]?[*:0]const u8{ "sh", "-c", @ptrCast(&cmd_buf) };
+        _ = std.posix.execvpeZ("sh", &argv, std.c.environ) catch {};
+        std.posix.exit(1);
     }
 }
 
 fn spawn_terminal() void {
     const pid = std.posix.fork() catch return;
     if (pid == 0) {
-        const terminals = [_][*:0]const u8{ "st", "alacritty", "xterm" };
-        for (terminals) |term| {
-            const argv = [_:null]?[*:0]const u8{term};
-            _ = std.posix.execvpeZ(term, &argv, std.c.environ) catch continue;
+        var term_buf: [256]u8 = undefined;
+        const terminal = config.terminal;
+        if (terminal.len >= term_buf.len) {
+            std.posix.exit(1);
         }
+        @memcpy(term_buf[0..terminal.len], terminal);
+        term_buf[terminal.len] = 0;
+        const term_ptr: [*:0]const u8 = @ptrCast(&term_buf);
+        const argv = [_:null]?[*:0]const u8{term_ptr};
+        _ = std.posix.execvpeZ(term_ptr, &argv, std.c.environ) catch {};
         std.posix.exit(1);
     }
 }
 
-fn spawn_dmenu() void {
-    const pid = std.posix.fork() catch return;
-    if (pid == 0) {
-        const argv = [_:null]?[*:0]const u8{"dmenu_run"};
-        _ = std.posix.execvpeZ("dmenu_run", &argv, std.c.environ) catch {};
-        std.posix.exit(1);
+fn movestack(display: *Display, direction: i32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const current = monitor.sel orelse return;
+
+    if (current.is_floating) {
+        return;
+    }
+
+    var target: ?*Client = null;
+
+    if (direction > 0) {
+        target = current.next;
+        while (target) |client| {
+            if (client_mod.is_visible(client) and !client.is_floating) {
+                break;
+            }
+            target = client.next;
+        }
+        if (target == null) {
+            target = monitor.clients;
+            while (target) |client| {
+                if (client == current) {
+                    break;
+                }
+                if (client_mod.is_visible(client) and !client.is_floating) {
+                    break;
+                }
+                target = client.next;
+            }
+        }
+    } else {
+        var prev: ?*Client = null;
+        var iter = monitor.clients;
+        while (iter) |client| {
+            if (client == current) {
+                break;
+            }
+            if (client_mod.is_visible(client) and !client.is_floating) {
+                prev = client;
+            }
+            iter = client.next;
+        }
+        if (prev == null) {
+            iter = current.next;
+            while (iter) |client| {
+                if (client_mod.is_visible(client) and !client.is_floating) {
+                    prev = client;
+                }
+                iter = client.next;
+            }
+        }
+        target = prev;
+    }
+
+    if (target) |swap_client| {
+        if (swap_client != current) {
+            client_mod.swap_clients(current, swap_client);
+            arrange(monitor);
+            focus(display, current);
+        }
     }
 }
 
-fn spawn_screenshot() void {
-    const pid = std.posix.fork() catch return;
-    if (pid == 0) {
-        const argv = [_:null]?[*:0]const u8{ "sh", "-c", "maim -s | xclip -selection clipboard -t image/png" };
-        _ = std.posix.execvpeZ("sh", &argv, std.c.environ) catch {};
-        std.posix.exit(1);
+fn toggle_view(display: *Display, tag_mask: u32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const new_tags = monitor.tagset[monitor.sel_tags] ^ tag_mask;
+    if (new_tags != 0) {
+        monitor.tagset[monitor.sel_tags] = new_tags;
+        focus_top_client(display, monitor);
+        arrange(monitor);
+        bar_mod.invalidate_bars();
+    }
+}
+
+fn toggle_client_tag(display: *Display, tag_mask: u32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const client = monitor.sel orelse return;
+    const new_tags = client.tags ^ tag_mask;
+    if (new_tags != 0) {
+        client.tags = new_tags;
+        focus_top_client(display, monitor);
+        arrange(monitor);
+        bar_mod.invalidate_bars();
     }
 }
 
@@ -1292,7 +1417,7 @@ fn apply_rules(display: *Display, client: *Client) void {
     client.is_floating = false;
     client.tags = 0;
 
-    for (rules) |rule| {
+    for (config.rules.items) |rule| {
         const class_matches = if (rule.class) |rc| std.mem.indexOf(u8, class_str, rc) != null else true;
         const instance_matches = if (rule.instance) |ri| std.mem.indexOf(u8, instance_str, ri) != null else true;
         const title_matches = if (rule.title) |rt| std.mem.indexOf(u8, std.mem.sliceTo(&client.name, 0), rt) != null else true;

@@ -137,3 +137,52 @@ pub fn count_tiled(monitor: *Monitor) u32 {
     }
     return count;
 }
+
+pub fn swap_clients(client_a: *Client, client_b: *Client) void {
+    const monitor = client_a.monitor orelse return;
+    if (client_b.monitor != monitor) return;
+
+    var prev_a: ?*Client = null;
+    var prev_b: ?*Client = null;
+    var iter = monitor.clients;
+
+    while (iter) |client| {
+        if (client.next == client_a) prev_a = client;
+        if (client.next == client_b) prev_b = client;
+        iter = client.next;
+    }
+
+    const next_a = client_a.next;
+    const next_b = client_b.next;
+
+    if (next_a == client_b) {
+        client_a.next = next_b;
+        client_b.next = client_a;
+        if (prev_a) |prev| {
+            prev.next = client_b;
+        } else {
+            monitor.clients = client_b;
+        }
+    } else if (next_b == client_a) {
+        client_b.next = next_a;
+        client_a.next = client_b;
+        if (prev_b) |prev| {
+            prev.next = client_a;
+        } else {
+            monitor.clients = client_a;
+        }
+    } else {
+        client_a.next = next_b;
+        client_b.next = next_a;
+        if (prev_a) |prev| {
+            prev.next = client_b;
+        } else {
+            monitor.clients = client_b;
+        }
+        if (prev_b) |prev| {
+            prev.next = client_a;
+        } else {
+            monitor.clients = client_a;
+        }
+    }
+}

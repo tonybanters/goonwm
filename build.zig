@@ -13,10 +13,15 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    exe.addIncludePath(b.path("vendor"));
+    exe.addObjectFile(b.path("vendor/libs7.a"));
+
     exe.linkSystemLibrary("X11");
     exe.linkSystemLibrary("Xinerama");
     exe.linkSystemLibrary("Xft");
     exe.linkSystemLibrary("fontconfig");
+    exe.linkSystemLibrary("m");
+    exe.linkSystemLibrary("dl");
     exe.linkLibC();
 
     b.installArtifact(exe);
@@ -63,6 +68,7 @@ fn add_xephyr_run(b: *std.Build, exe: *std.Build.Step.Compile, multimon: bool) *
     const run_wm = b.addRunArtifact(exe);
     run_wm.step.dependOn(&setup.step);
     run_wm.setEnvironmentVariable("DISPLAY", ":2");
+    run_wm.addArgs(&.{ "-c", "resources/test-config.scm" });
 
     return run_wm;
 }
