@@ -1,12 +1,36 @@
 (set-terminal! "st")
 (set-font! "Iosevka Nerd Font Propo:style=Bold:size=14")
+(set-tags! '("", "󰊯", "", "", "󰙯", "󱇤", "", "󱘶", "󰧮"))
+
+;; colors
+(define red "#f7768e")
+(define cyan "#0db9d7")
+(define green "#9ece6a")
+(define light-blue "#7aa2f7")
+(define blue "#6dade3")
+(define purple "#ad8ee6")
+(define grey "#bbbbbb")
+(define separator "#444b6a")
 
 (border-width! 2)
-(border-focused! #x6dade3)
-(border-unfocused! #x444444)
+(border-focused! blue)
+(border-unfocused! grey)
 
 (gaps-inner! 5 5)
 (gaps-outer! 5 5)
+
+;; bar blocks (right side, rendered right-to-left)
+;; syntax: (block-xxx ... color)        = underline on (default)
+;;         (block-xxx ... color #f)     = underline off
+(block-shell " {}" "/home/tony/.config/oxwm/bad_script.sh" 5 green)
+(block-static "│" separator #f)
+(block-ram " Ram: {}/{} GB" 5 light-blue)
+(block-static "│" separator #f)
+(block-shell " {}" "uname -r" 99999 red)
+(block-static "│" separator #f)
+(block-battery "⚡ Bat: {}%" "- Bat: {}%" "✓ Bat: {}%" "BAT0" 30 purple)
+(block-static "│" separator #f)
+(block-datetime "󰸗 {}" "%a, %b %d - %-I:%M %P" 1 cyan)
 
 (bind '(mod1) "Return" (spawn-terminal))
 (bind '(mod1) "d" (spawn "rofi -show drun"))

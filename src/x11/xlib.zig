@@ -243,3 +243,11 @@ pub const XUngrabButton = c.XUngrabButton;
 pub const XUngrabKey = c.XUngrabKey;
 pub const AnyKey = c.AnyKey;
 pub const AnyModifier = c.AnyModifier;
+
+pub const Cursor = c.Cursor;
+pub const XCreateFontCursor = c.XCreateFontCursor;
+pub const XFreeCursor = c.XFreeCursor;
+pub const XDefineCursor = c.XDefineCursor;
+pub const XC_left_ptr = c.XC_left_ptr;
+pub const XC_sizing = c.XC_sizing;
+pub const XC_fleur = c.XC_fleur;

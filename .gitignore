@@ -5,3 +5,4 @@ zig-cache/
 result
 .direnv/
 .envrc
+vendor/s7.o

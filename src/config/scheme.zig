@@ -61,10 +61,11 @@ fn register_functions() void {
     _ = s7.s7_define_function(scm, "gaps-outer!", &scm_gaps_outer, 2, 0, false, "");
     _ = s7.s7_define_function(scm, "bind", &scm_bind, 3, 0, false, "");
     _ = s7.s7_define_function(scm, "rule", &scm_rule, 1, 0, false, "");
-    _ = s7.s7_define_function(scm, "block-static", &scm_block_static, 2, 0, false, "");
-    _ = s7.s7_define_function(scm, "block-datetime", &scm_block_datetime, 4, 0, false, "");
-    _ = s7.s7_define_function(scm, "block-ram", &scm_block_ram, 3, 0, false, "");
-    _ = s7.s7_define_function(scm, "block-shell", &scm_block_shell, 4, 0, false, "");
+    _ = s7.s7_define_function(scm, "block-static", &scm_block_static, 2, 1, false, "");
+    _ = s7.s7_define_function(scm, "block-datetime", &scm_block_datetime, 4, 1, false, "");
+    _ = s7.s7_define_function(scm, "block-ram", &scm_block_ram, 3, 1, false, "");
+    _ = s7.s7_define_function(scm, "block-shell", &scm_block_shell, 4, 1, false, "");
+    _ = s7.s7_define_function(scm, "block-battery", &scm_block_battery, 6, 1, false, "");
     _ = s7.s7_define_function(scm, "spawn", &scm_spawn, 1, 0, false, "");
     _ = s7.s7_define_function(scm, "spawn-terminal", &scm_spawn_terminal, 0, 0, false, "");
     _ = s7.s7_define_function(scm, "kill-client", &scm_kill_client, 0, 0, false, "");
@@ -101,6 +102,13 @@ fn get_string(ptr: s7.s7_pointer) ?[]const u8 {
 fn get_integer(ptr: s7.s7_pointer) ?i64 {
     if (!s7.s7_is_integer(ptr)) return null;
     return s7.s7_integer(ptr);
+}
+
+fn get_bool_or_default(scm: ?*s7.s7_scheme, ptr: s7.s7_pointer, default: bool) bool {
+    if (s7.s7_is_boolean(ptr)) {
+        return ptr == s7.s7_t(scm);
+    }
+    return default;
 }
 
 fn parse_color(scm: ?*s7.s7_scheme, ptr: s7.s7_pointer) ?u32 {
@@ -394,11 +402,14 @@ fn scm_block_static(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7
     const cfg = config orelse return s7.s7_f(scm);
     const text = get_string(s7.s7_car(args)) orelse return s7.s7_f(scm);
     const color = parse_color(scm, s7.s7_cadr(args)) orelse return s7.s7_f(scm);
+    const rest = s7.s7_cddr(args);
+    const underline = get_bool_or_default(scm, s7.s7_car(rest), true);
     cfg.add_block(.{
         .block_type = .static,
         .format = text,
         .interval = 0,
         .color = color,
+        .underline = underline,
     }) catch return s7.s7_f(scm);
     return s7.s7_t(scm);
 }
@@ -406,13 +417,18 @@ fn scm_block_static(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7
 fn scm_block_datetime(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_pointer {
     const cfg = config orelse return s7.s7_f(scm);
     const format = get_string(s7.s7_car(args)) orelse return s7.s7_f(scm);
+    const datetime_format = get_string(s7.s7_cadr(args)) orelse return s7.s7_f(scm);
     const interval = get_integer(s7.s7_caddr(args)) orelse return s7.s7_f(scm);
     const color = parse_color(scm, s7.s7_cadddr(args)) orelse return s7.s7_f(scm);
+    const rest = s7.s7_cddddr(args);
+    const underline = get_bool_or_default(scm, s7.s7_car(rest), true);
     cfg.add_block(.{
         .block_type = .datetime,
         .format = format,
+        .datetime_format = datetime_format,
         .interval = @intCast(interval),
         .color = color,
+        .underline = underline,
     }) catch return s7.s7_f(scm);
     return s7.s7_t(scm);
 }
@@ -422,11 +438,14 @@ fn scm_block_ram(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_po
     const format = get_string(s7.s7_car(args)) orelse return s7.s7_f(scm);
     const interval = get_integer(s7.s7_cadr(args)) orelse return s7.s7_f(scm);
     const color = parse_color(scm, s7.s7_caddr(args)) orelse return s7.s7_f(scm);
+    const rest = s7.s7_cdddr(args);
+    const underline = get_bool_or_default(scm, s7.s7_car(rest), true);
     cfg.add_block(.{
         .block_type = .ram,
         .format = format,
         .interval = @intCast(interval),
         .color = color,
+        .underline = underline,
     }) catch return s7.s7_f(scm);
     return s7.s7_t(scm);
 }
@@ -437,12 +456,40 @@ fn scm_block_shell(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_
     const command = get_string(s7.s7_cadr(args)) orelse return s7.s7_f(scm);
     const interval = get_integer(s7.s7_caddr(args)) orelse return s7.s7_f(scm);
     const color = parse_color(scm, s7.s7_cadddr(args)) orelse return s7.s7_f(scm);
+    const rest = s7.s7_cddddr(args);
+    const underline = get_bool_or_default(scm, s7.s7_car(rest), true);
     cfg.add_block(.{
         .block_type = .shell,
         .format = format,
         .command = command,
         .interval = @intCast(interval),
         .color = color,
+        .underline = underline,
+    }) catch return s7.s7_f(scm);
+    return s7.s7_t(scm);
+}
+
+fn scm_block_battery(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_pointer {
+    const cfg = config orelse return s7.s7_f(scm);
+    const format_charging = get_string(s7.s7_car(args)) orelse return s7.s7_f(scm);
+    const format_discharging = get_string(s7.s7_cadr(args)) orelse return s7.s7_f(scm);
+    const format_full = get_string(s7.s7_caddr(args)) orelse return s7.s7_f(scm);
+    const battery_name = get_string(s7.s7_cadddr(args)) orelse return s7.s7_f(scm);
+    const rest = s7.s7_cddddr(args);
+    const interval = get_integer(s7.s7_car(rest)) orelse return s7.s7_f(scm);
+    const color = parse_color(scm, s7.s7_cadr(rest)) orelse return s7.s7_f(scm);
+    const rest2 = s7.s7_cddr(rest);
+    const underline = get_bool_or_default(scm, s7.s7_car(rest2), true);
+    cfg.add_block(.{
+        .block_type = .battery,
+        .format = format_charging,
+        .format_charging = format_charging,
+        .format_discharging = format_discharging,
+        .format_full = format_full,
+        .battery_name = battery_name,
+        .interval = @intCast(interval),
+        .color = color,
+        .underline = underline,
     }) catch return s7.s7_f(scm);
     return s7.s7_t(scm);
 }

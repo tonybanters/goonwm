@@ -2,7 +2,7 @@ const std = @import("std");
 const xlib = @import("../x11/xlib.zig");
 const monitor_mod = @import("../monitor.zig");
 const client_mod = @import("../client.zig");
-const blocks_mod = @import("blocks.zig");
+const blocks_mod = @import("blocks/blocks.zig");
 
 const Monitor = monitor_mod.Monitor;
 const Block = blocks_mod.Block;
@@ -183,10 +183,13 @@ pub const Bar = struct {
         while (block_index > 0) {
             block_index -= 1;
             const block = &self.blocks.items[block_index];
-            const content = block.get_content();
+            const content = block.getContent();
             const content_width = self.text_width(display, content);
             block_x -= content_width;
-            self.draw_text(display, block_x, @divTrunc(self.height + self.font_height, 2) - 2, content, block.color);
+            self.draw_text(display, block_x, @divTrunc(self.height + self.font_height, 2) - 2, content, block.color());
+            if (block.underline) {
+                self.fill_rect(display, block_x, self.height - 2, content_width, 2, block.color());
+            }
             block_x -= padding;
         }
 
@@ -257,6 +260,10 @@ pub const Bar = struct {
         if (changed) {
             self.needs_redraw = true;
         }
+    }
+
+    pub fn clear_blocks(self: *Bar) void {
+        self.blocks.clearRetainingCapacity();
     }
 };
 

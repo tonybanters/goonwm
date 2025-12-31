@@ -128,6 +128,32 @@ pub fn is_visible(client: *Client) bool {
     return false;
 }
 
+pub fn is_visible_on_tag(client: *Client, tags: u32) bool {
+    return (client.tags & tags) != 0;
+}
+
+pub fn next_tagged(client: *Client) ?*Client {
+    const monitor = client.monitor orelse return null;
+    var walked = monitor.clients;
+    while (walked) |iter| {
+        if (!iter.is_floating and is_visible_on_tag(iter, client.tags)) {
+            return iter;
+        }
+        walked = iter.next;
+    }
+    return null;
+}
+
+pub fn attach_aside(client: *Client) void {
+    const at = next_tagged(client);
+    if (at == null) {
+        attach(client);
+        return;
+    }
+    client.next = at.?.next;
+    at.?.next = client;
+}
+
 pub fn count_tiled(monitor: *Monitor) u32 {
     var count: u32 = 0;
     var current = next_tiled(monitor.clients);

@@ -7,7 +7,7 @@ const monitor_mod = @import("monitor.zig");
 const tiling = @import("layouts/tiling.zig");
 const monocle = @import("layouts/monocle.zig");
 const bar_mod = @import("bar/bar.zig");
-const blocks_mod = @import("bar/blocks.zig");
+const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
 const scheme_mod = @import("config/scheme.zig");
 
@@ -39,6 +39,10 @@ var border_color_focused: c_ulong = 0x6dade3;
 var border_color_unfocused: c_ulong = 0x444444;
 
 var tags: [9][]const u8 = .{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+
+var cursor_normal: xlib.Cursor = 0;
+var cursor_resize: xlib.Cursor = 0;
+var cursor_move: xlib.Cursor = 0;
 
 var config: config_mod.Config = undefined;
 var display_global: ?*Display = null;
@@ -108,6 +112,7 @@ pub fn main() !void {
     std.debug.print("successfully became window manager\n", .{});
 
     setup_atoms(&display);
+    setup_cursors(&display);
     client_mod.init(allocator);
     monitor_mod.init(allocator);
     tiling.set_display(display.handle);
@@ -155,19 +160,51 @@ fn setup_atoms(display: *Display) void {
     std.debug.print("atoms initialized with EWMH support\n", .{});
 }
 
+fn setup_cursors(display: *Display) void {
+    cursor_normal = xlib.XCreateFontCursor(display.handle, xlib.XC_left_ptr);
+    cursor_resize = xlib.XCreateFontCursor(display.handle, xlib.XC_sizing);
+    cursor_move = xlib.XCreateFontCursor(display.handle, xlib.XC_fleur);
+    _ = xlib.XDefineCursor(display.handle, display.root, cursor_normal);
+}
+
 fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
     var current_monitor = monitor_mod.monitors;
     while (current_monitor) |monitor| {
-        const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, "JetBrainsMono Nerd Font Propo:style=Bold:size=14");
+        const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, config.font);
         if (bar) |created_bar| {
-            created_bar.add_block(blocks_mod.Block.init_ram("", 5, 0x7aa2f7));
-            created_bar.add_block(blocks_mod.Block.init_static(" | ", 0x666666));
-            created_bar.add_block(blocks_mod.Block.init_datetime("", "%H:%M", 1, 0x0db9d7));
+            if (config.blocks.items.len > 0) {
+                for (config.blocks.items) |cfg_block| {
+                    const block = config_block_to_bar_block(cfg_block);
+                    created_bar.add_block(block);
+                }
+            } else {
+                created_bar.add_block(blocks_mod.Block.initRam("", 5, 0x7aa2f7, true));
+                created_bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
+                created_bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
+            }
             bar_mod.bars = created_bar;
             std.debug.print("bar created for monitor\n", .{});
         }
         current_monitor = monitor.next;
     }
+}
+
+fn config_block_to_bar_block(cfg: config_mod.Block) blocks_mod.Block {
+    return switch (cfg.block_type) {
+        .static => blocks_mod.Block.initStatic(cfg.format, cfg.color, cfg.underline),
+        .datetime => blocks_mod.Block.initDatetime(cfg.format, cfg.datetime_format orelse "%H:%M", cfg.interval, cfg.color, cfg.underline),
+        .ram => blocks_mod.Block.initRam(cfg.format, cfg.interval, cfg.color, cfg.underline),
+        .shell => blocks_mod.Block.initShell(cfg.format, cfg.command orelse "", cfg.interval, cfg.color, cfg.underline),
+        .battery => blocks_mod.Block.initBattery(
+            cfg.format_charging orelse "",
+            cfg.format_discharging orelse "",
+            cfg.format_full orelse "",
+            cfg.battery_name orelse "BAT0",
+            cfg.interval,
+            cfg.color,
+            cfg.underline,
+        ),
+    };
 }
 
 fn setup_monitors(display: *Display) void {
@@ -453,7 +490,7 @@ fn manage(display: *Display, win: xlib.Window, window_attrs: *xlib.XWindowAttrib
         _ = xlib.XRaiseWindow(display.handle, client.window);
     }
 
-    client_mod.attach(client);
+    client_mod.attach_aside(client);
     client_mod.attach_stack(client);
 
     _ = xlib.XChangeProperty(display.handle, display.root, net_client_list, xlib.XA_WINDOW, 32, xlib.PropModeAppend, @ptrCast(&client.window), 1);
@@ -560,6 +597,7 @@ fn reload_config(display: *Display) void {
 
     config.keybinds.clearRetainingCapacity();
     config.rules.clearRetainingCapacity();
+    config.blocks.clearRetainingCapacity();
 
     const loaded = if (config_path_global) |path|
         scheme_mod.load_file(path)
@@ -578,8 +616,27 @@ fn reload_config(display: *Display) void {
         setup_default_keybinds();
     }
 
+    rebuild_bar_blocks();
     grab_keybinds(display);
     bar_mod.invalidate_bars();
+}
+
+fn rebuild_bar_blocks() void {
+    var current_bar = bar_mod.bars;
+    while (current_bar) |bar| {
+        bar.clear_blocks();
+        if (config.blocks.items.len > 0) {
+            for (config.blocks.items) |cfg_block| {
+                const block = config_block_to_bar_block(cfg_block);
+                bar.add_block(block);
+            }
+        } else {
+            bar.add_block(blocks_mod.Block.initRam("", 5, 0x7aa2f7, true));
+            bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
+            bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
+        }
+        current_bar = null; // TODO: bar linked list if multiple monitors
+    }
 }
 
 fn ungrab_keybinds(display: *Display) void {
@@ -960,7 +1017,7 @@ fn sendmon(display: *Display, direction: i32) void {
     client_mod.detach_stack(client);
     client.monitor = target;
     client.tags = target.tagset[target.sel_tags];
-    client_mod.attach(client);
+    client_mod.attach_aside(client);
     client_mod.attach_stack(client);
 
     focus_top_client(display, source_monitor);
@@ -998,7 +1055,7 @@ fn movemouse(display: *Display) void {
         xlib.GrabModeAsync,
         xlib.GrabModeAsync,
         xlib.None,
-        xlib.None,
+        cursor_move,
         xlib.CurrentTime,
     );
 
@@ -1055,7 +1112,7 @@ fn resizemouse(display: *Display) void {
         xlib.GrabModeAsync,
         xlib.GrabModeAsync,
         xlib.None,
-        xlib.None,
+        cursor_resize,
         xlib.CurrentTime,
     );
 
