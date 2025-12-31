@@ -5,6 +5,9 @@ const xlib = @import("x11/xlib.zig");
 const client_mod = @import("client.zig");
 const monitor_mod = @import("monitor.zig");
 const tiling = @import("layouts/tiling.zig");
+const monocle = @import("layouts/monocle.zig");
+const bar_mod = @import("bar/bar.zig");
+const blocks_mod = @import("bar/blocks.zig");
 
 const Display = display_mod.Display;
 const Client = client_mod.Client;
@@ -13,8 +16,41 @@ const Monitor = monitor_mod.Monitor;
 var running: bool = true;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 
+var wm_protocols: xlib.Atom = 0;
+var wm_delete: xlib.Atom = 0;
+var wm_state: xlib.Atom = 0;
+var wm_take_focus: xlib.Atom = 0;
+
+var net_supported: xlib.Atom = 0;
+var net_wm_name: xlib.Atom = 0;
 var net_wm_state: xlib.Atom = 0;
+var net_wm_check: xlib.Atom = 0;
 var net_wm_state_fullscreen: xlib.Atom = 0;
+var net_active_window: xlib.Atom = 0;
+var net_wm_window_type: xlib.Atom = 0;
+var net_wm_window_type_dialog: xlib.Atom = 0;
+var net_client_list: xlib.Atom = 0;
+
+var wm_check_window: xlib.Window = 0;
+
+const border_color_focused: c_ulong = 0x6dade3;
+const border_color_unfocused: c_ulong = 0x444444;
+
+const tags = [_][]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+
+const Rule = struct {
+    class: ?[]const u8,
+    instance: ?[]const u8,
+    title: ?[]const u8,
+    tags: u32,
+    is_floating: bool,
+    monitor: i32,
+};
+
+const rules = [_]Rule{
+    .{ .class = "Gimp", .instance = null, .title = null, .tags = 0, .is_floating = true, .monitor = -1 },
+    .{ .class = "Firefox", .instance = null, .title = null, .tags = 1 << 8, .is_floating = false, .monitor = -1 },
+};
 
 pub fn main() !void {
     const allocator = gpa.allocator();
@@ -44,6 +80,7 @@ pub fn main() !void {
     tiling.set_display(display.handle);
 
     setup_monitors(&display);
+    setup_bars(allocator, &display);
     setup_keybinds(&display);
     scan_existing_windows(&display);
 
@@ -54,12 +91,96 @@ pub fn main() !void {
 }
 
 fn setup_atoms(display: *Display) void {
+    wm_protocols = xlib.XInternAtom(display.handle, "WM_PROTOCOLS", xlib.False);
+    wm_delete = xlib.XInternAtom(display.handle, "WM_DELETE_WINDOW", xlib.False);
+    wm_state = xlib.XInternAtom(display.handle, "WM_STATE", xlib.False);
+    wm_take_focus = xlib.XInternAtom(display.handle, "WM_TAKE_FOCUS", xlib.False);
+
+    net_active_window = xlib.XInternAtom(display.handle, "_NET_ACTIVE_WINDOW", xlib.False);
+    net_supported = xlib.XInternAtom(display.handle, "_NET_SUPPORTED", xlib.False);
+    net_wm_name = xlib.XInternAtom(display.handle, "_NET_WM_NAME", xlib.False);
     net_wm_state = xlib.XInternAtom(display.handle, "_NET_WM_STATE", xlib.False);
+    net_wm_check = xlib.XInternAtom(display.handle, "_NET_SUPPORTING_WM_CHECK", xlib.False);
     net_wm_state_fullscreen = xlib.XInternAtom(display.handle, "_NET_WM_STATE_FULLSCREEN", xlib.False);
-    std.debug.print("atoms initialized\n", .{});
+    net_wm_window_type = xlib.XInternAtom(display.handle, "_NET_WM_WINDOW_TYPE", xlib.False);
+    net_wm_window_type_dialog = xlib.XInternAtom(display.handle, "_NET_WM_WINDOW_TYPE_DIALOG", xlib.False);
+    net_client_list = xlib.XInternAtom(display.handle, "_NET_CLIENT_LIST", xlib.False);
+
+    const utf8_string = xlib.XInternAtom(display.handle, "UTF8_STRING", xlib.False);
+
+    wm_check_window = xlib.XCreateSimpleWindow(display.handle, display.root, 0, 0, 1, 1, 0, 0, 0);
+    _ = xlib.XChangeProperty(display.handle, wm_check_window, net_wm_check, xlib.XA_WINDOW, 32, xlib.PropModeReplace, @ptrCast(&wm_check_window), 1);
+    _ = xlib.XChangeProperty(display.handle, wm_check_window, net_wm_name, utf8_string, 8, xlib.PropModeReplace, "goonwm", 6);
+    _ = xlib.XChangeProperty(display.handle, display.root, net_wm_check, xlib.XA_WINDOW, 32, xlib.PropModeReplace, @ptrCast(&wm_check_window), 1);
+
+    var net_atoms = [_]xlib.Atom{ net_supported, net_wm_name, net_wm_state, net_wm_check, net_wm_state_fullscreen, net_active_window, net_wm_window_type, net_wm_window_type_dialog, net_client_list };
+    _ = xlib.XChangeProperty(display.handle, display.root, net_supported, xlib.XA_ATOM, 32, xlib.PropModeReplace, @ptrCast(&net_atoms), net_atoms.len);
+
+    _ = xlib.XDeleteProperty(display.handle, display.root, net_client_list);
+
+    std.debug.print("atoms initialized with EWMH support\n", .{});
+}
+
+fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
+    var current_monitor = monitor_mod.monitors;
+    while (current_monitor) |monitor| {
+        const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, "monospace:size=10");
+        if (bar) |created_bar| {
+            created_bar.add_block(blocks_mod.Block.init_ram("", 5, 0x7aa2f7));
+            created_bar.add_block(blocks_mod.Block.init_static(" | ", 0x666666));
+            created_bar.add_block(blocks_mod.Block.init_datetime("", "%H:%M", 1, 0x0db9d7));
+            bar_mod.bars = created_bar;
+            std.debug.print("bar created for monitor\n", .{});
+        }
+        current_monitor = monitor.next;
+    }
 }
 
 fn setup_monitors(display: *Display) void {
+    std.debug.print("checking xinerama...\n", .{});
+    if (xlib.XineramaIsActive(display.handle) != 0) {
+        std.debug.print("xinerama is active!\n", .{});
+        var screen_count: c_int = 0;
+        const screens = xlib.XineramaQueryScreens(display.handle, &screen_count);
+
+        if (screen_count > 0 and screens != null) {
+            var prev_monitor: ?*Monitor = null;
+            var index: usize = 0;
+
+            while (index < @as(usize, @intCast(screen_count))) : (index += 1) {
+                const screen = screens[index];
+                const mon = monitor_mod.create() orelse continue;
+
+                mon.num = @intCast(index);
+                mon.mon_x = screen.x_org;
+                mon.mon_y = screen.y_org;
+                mon.mon_w = screen.width;
+                mon.mon_h = screen.height;
+                mon.win_x = screen.x_org;
+                mon.win_y = screen.y_org;
+                mon.win_w = screen.width;
+                mon.win_h = screen.height;
+                mon.lt[0] = &tiling.layout;
+                mon.lt[1] = &monocle.layout;
+
+                if (prev_monitor) |prev| {
+                    prev.next = mon;
+                } else {
+                    monitor_mod.monitors = mon;
+                }
+                prev_monitor = mon;
+
+                std.debug.print("monitor {d}: {d}x{d} at ({d},{d})\n", .{ index, mon.mon_w, mon.mon_h, mon.mon_x, mon.mon_y });
+            }
+
+            monitor_mod.selected_monitor = monitor_mod.monitors;
+            _ = xlib.XFree(@ptrCast(screens));
+            return;
+        }
+    } else {
+        std.debug.print("xinerama not active, using single monitor\n", .{});
+    }
+
     const mon = monitor_mod.create() orelse return;
     mon.mon_x = 0;
     mon.mon_y = 0;
@@ -70,6 +191,7 @@ fn setup_monitors(display: *Display) void {
     mon.win_w = display.screen_width();
     mon.win_h = display.screen_height();
     mon.lt[0] = &tiling.layout;
+    mon.lt[1] = &monocle.layout;
     monitor_mod.monitors = mon;
     monitor_mod.selected_monitor = mon;
     std.debug.print("monitor created: {d}x{d}\n", .{ mon.mon_w, mon.mon_h });
@@ -85,7 +207,19 @@ fn setup_keybinds(display: *Display) void {
     display.grab_key(display.keysym_to_keycode(xlib.XK_f), alt_key);
     display.grab_key(display.keysym_to_keycode(xlib.XK_j), alt_key);
     display.grab_key(display.keysym_to_keycode(xlib.XK_k), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_h), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_l), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_i), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_d), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_m), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_comma), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_period), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_comma), alt_key | xlib.ShiftMask);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_period), alt_key | xlib.ShiftMask);
     display.grab_key(display.keysym_to_keycode(xlib.XK_space), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_p), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_a), alt_key);
+    display.grab_key(display.keysym_to_keycode(xlib.XK_s), alt_key);
 
     const tag_keys = [_]c_ulong{ xlib.XK_1, xlib.XK_2, xlib.XK_3, xlib.XK_4, xlib.XK_5, xlib.XK_6, xlib.XK_7, xlib.XK_8, xlib.XK_9 };
     for (tag_keys) |key| {
@@ -93,7 +227,33 @@ fn setup_keybinds(display: *Display) void {
         display.grab_key(display.keysym_to_keycode(key), alt_key | xlib.ShiftMask);
     }
 
-    std.debug.print("keybinds: mod+shift+q=quit, alt+enter=terminal, alt+q=close, alt+f=fullscreen, alt+j/k=focus, alt+space=float, alt+1-9=view, alt+shift+1-9=tag\n", .{});
+    _ = xlib.XGrabButton(
+        display.handle,
+        xlib.Button1,
+        alt_key,
+        display.root,
+        xlib.True,
+        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
+        xlib.GrabModeAsync,
+        xlib.GrabModeAsync,
+        xlib.None,
+        xlib.None,
+    );
+
+    _ = xlib.XGrabButton(
+        display.handle,
+        xlib.Button3,
+        alt_key,
+        display.root,
+        xlib.True,
+        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
+        xlib.GrabModeAsync,
+        xlib.GrabModeAsync,
+        xlib.None,
+        xlib.None,
+    );
+
+    std.debug.print("keybinds: mod+shift+q=quit, alt+enter=terminal, alt+q=close, alt+f=fullscreen, alt+j/k=focus, alt+space=float, alt+1-9=view, alt+shift+1-9=tag, alt+mouse1=move, alt+mouse3=resize\n", .{});
 }
 
 fn scan_existing_windows(display: *Display) void {
@@ -118,9 +278,25 @@ fn scan_existing_windows(display: *Display) void {
 }
 
 fn run_event_loop(display: *Display) void {
+    const x11_fd = xlib.XConnectionNumber(display.handle);
+    var fds = [_]std.posix.pollfd{
+        .{ .fd = x11_fd, .events = std.posix.POLL.IN, .revents = 0 },
+    };
+
+    _ = xlib.XSync(display.handle, xlib.False);
+
     while (running) {
-        var event = display.next_event();
-        handle_event(display, &event);
+        while (xlib.XPending(display.handle) > 0) {
+            var event = display.next_event();
+            handle_event(display, &event);
+        }
+
+        if (bar_mod.bars) |bar| {
+            bar.update_blocks();
+            bar.draw(display.handle, &tags);
+        }
+
+        _ = std.posix.poll(&fds, 1000) catch 0;
     }
 }
 
@@ -135,6 +311,9 @@ fn handle_event(display: *Display, event: *xlib.XEvent) void {
         .unmap_notify => handle_unmap_notify(display, &event.xunmap),
         .enter_notify => handle_enter_notify(display, &event.xcrossing),
         .client_message => handle_client_message(display, &event.xclient),
+        .button_press => handle_button_press(display, &event.xbutton),
+        .expose => handle_expose(display, &event.xexpose),
+        .property_notify => handle_property_notify(display, &event.xproperty),
         else => {},
     }
 }
@@ -158,21 +337,50 @@ fn handle_map_request(display: *Display, event: *xlib.XMapRequestEvent) void {
 
 fn manage(display: *Display, win: xlib.Window, window_attrs: *xlib.XWindowAttributes) void {
     const client = client_mod.create(win) orelse return;
-    const monitor = monitor_mod.selected_monitor orelse return;
+    var trans: xlib.Window = 0;
 
     client.x = window_attrs.x;
     client.y = window_attrs.y;
     client.width = window_attrs.width;
     client.height = window_attrs.height;
+    client.old_x = window_attrs.x;
+    client.old_y = window_attrs.y;
+    client.old_width = window_attrs.width;
+    client.old_height = window_attrs.height;
     client.old_border_width = window_attrs.border_width;
     client.border_width = 1;
-    client.monitor = monitor;
-    client.tags = monitor.tagset[monitor.sel_tags];
+
+    update_title(display, client);
+
+    if (xlib.XGetTransientForHint(display.handle, win, &trans) != 0) {
+        if (client_mod.window_to_client(trans)) |transient_client| {
+            client.monitor = transient_client.monitor;
+            client.tags = transient_client.tags;
+        }
+    }
+
+    if (client.monitor == null) {
+        client.monitor = monitor_mod.selected_monitor;
+        apply_rules(display, client);
+    }
+
+    const monitor = client.monitor orelse return;
+
+    if (client.x + client.width > monitor.win_x + monitor.win_w) {
+        client.x = monitor.win_x + monitor.win_w - client.width - 2 * client.border_width;
+    }
+    if (client.y + client.height > monitor.win_y + monitor.win_h) {
+        client.y = monitor.win_y + monitor.win_h - client.height - 2 * client.border_width;
+    }
+    client.x = @max(client.x, monitor.win_x);
+    client.y = @max(client.y, monitor.win_y);
 
     _ = xlib.XSetWindowBorderWidth(display.handle, win, @intCast(client.border_width));
+    _ = xlib.XSetWindowBorder(display.handle, win, border_color_unfocused);
 
-    client_mod.attach(client);
-    client_mod.attach_stack(client);
+    update_window_type(display, client);
+    update_size_hints(display, client);
+    update_wm_hints(display, client);
 
     _ = xlib.XSelectInput(
         display.handle,
@@ -180,10 +388,25 @@ fn manage(display: *Display, win: xlib.Window, window_attrs: *xlib.XWindowAttrib
         xlib.EnterWindowMask | xlib.FocusChangeMask | xlib.PropertyChangeMask | xlib.StructureNotifyMask,
     );
 
+    if (!client.is_floating) {
+        client.is_floating = trans != 0 or client.is_fixed;
+        client.old_state = client.is_floating;
+    }
+    if (client.is_floating) {
+        _ = xlib.XRaiseWindow(display.handle, client.window);
+    }
+
+    client_mod.attach(client);
+    client_mod.attach_stack(client);
+
+    _ = xlib.XChangeProperty(display.handle, display.root, net_client_list, xlib.XA_WINDOW, 32, xlib.PropModeAppend, @ptrCast(&client.window), 1);
+    _ = xlib.XMoveResizeWindow(display.handle, client.window, client.x + 2 * display.screen_width(), client.y, @intCast(client.width), @intCast(client.height));
+
     _ = xlib.XMapWindow(display.handle, win);
 
     focus(display, client);
     arrange(monitor);
+    bar_mod.invalidate_bars();
 }
 
 fn handle_configure_request(display: *Display, event: *xlib.XConfigureRequestEvent) void {
@@ -254,6 +477,64 @@ fn handle_key_press(display: *Display, event: *xlib.XKeyEvent) void {
         return;
     }
 
+    if (keysym == xlib.XK_h and alt_pressed) {
+        setmfact(-0.05);
+        return;
+    }
+
+    if (keysym == xlib.XK_l and alt_pressed) {
+        setmfact(0.05);
+        return;
+    }
+
+    if (keysym == xlib.XK_i and alt_pressed) {
+        incnmaster(1);
+        return;
+    }
+
+    if (keysym == xlib.XK_d and alt_pressed) {
+        incnmaster(-1);
+        return;
+    }
+
+    if (keysym == xlib.XK_m and alt_pressed) {
+        cycle_layout();
+        return;
+    }
+
+    if (keysym == xlib.XK_p and alt_pressed) {
+        spawn_dmenu();
+        return;
+    }
+
+    if (keysym == xlib.XK_a and alt_pressed) {
+        toggle_gaps();
+        return;
+    }
+
+    if (keysym == xlib.XK_s and alt_pressed) {
+        spawn_screenshot();
+        return;
+    }
+
+    if (keysym == xlib.XK_comma and alt_pressed) {
+        if (shift_pressed) {
+            sendmon(display, -1);
+        } else {
+            focusmon(display, -1);
+        }
+        return;
+    }
+
+    if (keysym == xlib.XK_period and alt_pressed) {
+        if (shift_pressed) {
+            sendmon(display, 1);
+        } else {
+            focusmon(display, 1);
+        }
+        return;
+    }
+
     const tag_keys = [_]c_ulong{ xlib.XK_1, xlib.XK_2, xlib.XK_3, xlib.XK_4, xlib.XK_5, xlib.XK_6, xlib.XK_7, xlib.XK_8, xlib.XK_9 };
     for (tag_keys, 0..) |key, index| {
         if (keysym == key and alt_pressed) {
@@ -271,17 +552,60 @@ fn handle_key_press(display: *Display, event: *xlib.XKeyEvent) void {
 fn spawn_terminal() void {
     const pid = std.posix.fork() catch return;
     if (pid == 0) {
-        const argv = [_:null]?[*:0]const u8{"alacritty"};
-        _ = std.posix.execvpeZ("alacritty", &argv, std.c.environ) catch {};
+        const terminals = [_][*:0]const u8{ "st", "alacritty", "xterm" };
+        for (terminals) |term| {
+            const argv = [_:null]?[*:0]const u8{term};
+            _ = std.posix.execvpeZ(term, &argv, std.c.environ) catch continue;
+        }
         std.posix.exit(1);
     }
+}
+
+fn spawn_dmenu() void {
+    const pid = std.posix.fork() catch return;
+    if (pid == 0) {
+        const argv = [_:null]?[*:0]const u8{"dmenu_run"};
+        _ = std.posix.execvpeZ("dmenu_run", &argv, std.c.environ) catch {};
+        std.posix.exit(1);
+    }
+}
+
+fn spawn_screenshot() void {
+    const pid = std.posix.fork() catch return;
+    if (pid == 0) {
+        const argv = [_:null]?[*:0]const u8{ "sh", "-c", "maim -s | xclip -selection clipboard -t image/png" };
+        _ = std.posix.execvpeZ("sh", &argv, std.c.environ) catch {};
+        std.posix.exit(1);
+    }
+}
+
+fn toggle_gaps() void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    if (monitor.gap_inner_h == 0) {
+        monitor.gap_inner_h = 5;
+        monitor.gap_inner_v = 5;
+        monitor.gap_outer_h = 5;
+        monitor.gap_outer_v = 5;
+    } else {
+        monitor.gap_inner_h = 0;
+        monitor.gap_inner_v = 0;
+        monitor.gap_outer_h = 0;
+        monitor.gap_outer_v = 0;
+    }
+    arrange(monitor);
 }
 
 fn kill_focused(display: *Display) void {
     const selected = monitor_mod.selected_monitor orelse return;
     const client = selected.sel orelse return;
     std.debug.print("killing window: 0x{x}\n", .{client.window});
-    _ = xlib.XKillClient(display.handle, client.window);
+
+    if (!send_event(display, client, wm_delete)) {
+        _ = xlib.XGrabServer(display.handle);
+        _ = xlib.XKillClient(display.handle, client.window);
+        _ = xlib.XSync(display.handle, xlib.False);
+        _ = xlib.XUngrabServer(display.handle);
+    }
 }
 
 fn toggle_fullscreen(display: *Display) void {
@@ -356,6 +680,7 @@ fn view(display: *Display, tag_mask: u32) void {
     }
     focus_top_client(display, monitor);
     arrange(monitor);
+    bar_mod.invalidate_bars();
     std.debug.print("view: tag_mask={d}\n", .{monitor.tagset[monitor.sel_tags]});
 }
 
@@ -368,6 +693,7 @@ fn tag_client(display: *Display, tag_mask: u32) void {
     client.tags = tag_mask;
     focus_top_client(display, monitor);
     arrange(monitor);
+    bar_mod.invalidate_bars();
     std.debug.print("tag_client: window=0x{x} tag_mask={d}\n", .{ client.window, tag_mask });
 }
 
@@ -455,14 +781,239 @@ fn toggle_floating(display: *Display) void {
     std.debug.print("toggle_floating: window=0x{x} floating={}\n", .{ client.window, client.is_floating });
 }
 
+fn incnmaster(delta: i32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    monitor.nmaster = @max(0, monitor.nmaster + delta);
+    arrange(monitor);
+    std.debug.print("incnmaster: nmaster={d}\n", .{monitor.nmaster});
+}
+
+fn setmfact(delta: f32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const new_mfact = monitor.mfact + delta;
+    if (new_mfact < 0.05 or new_mfact > 0.95) {
+        return;
+    }
+    monitor.mfact = new_mfact;
+    arrange(monitor);
+    std.debug.print("setmfact: mfact={d:.2}\n", .{monitor.mfact});
+}
+
+fn cycle_layout() void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    monitor.sel_lt = (monitor.sel_lt + 1) % 2;
+    arrange(monitor);
+    if (monitor.lt[monitor.sel_lt]) |layout| {
+        std.debug.print("cycle_layout: {s}\n", .{layout.symbol});
+    }
+}
+
+fn focusmon(display: *Display, direction: i32) void {
+    const target = monitor_mod.dir_to_monitor(direction) orelse return;
+    if (target == monitor_mod.selected_monitor) {
+        return;
+    }
+    monitor_mod.selected_monitor = target;
+    if (target.sel) |client| {
+        focus(display, client);
+    } else {
+        _ = xlib.XSetInputFocus(display.handle, display.root, xlib.RevertToPointerRoot, xlib.CurrentTime);
+    }
+    std.debug.print("focusmon: monitor {d}\n", .{target.num});
+}
+
+fn sendmon(display: *Display, direction: i32) void {
+    const source_monitor = monitor_mod.selected_monitor orelse return;
+    const client = source_monitor.sel orelse return;
+    const target = monitor_mod.dir_to_monitor(direction) orelse return;
+
+    if (target == source_monitor) {
+        return;
+    }
+
+    client_mod.detach(client);
+    client_mod.detach_stack(client);
+    client.monitor = target;
+    client.tags = target.tagset[target.sel_tags];
+    client_mod.attach(client);
+    client_mod.attach_stack(client);
+
+    focus_top_client(display, source_monitor);
+    arrange(source_monitor);
+    arrange(target);
+
+    std.debug.print("sendmon: window=0x{x} to monitor {d}\n", .{ client.window, target.num });
+}
+
+fn movemouse(display: *Display) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const client = monitor.sel orelse return;
+
+    if (client.is_fullscreen) {
+        return;
+    }
+
+    if (!client.is_floating) {
+        client.is_floating = true;
+    }
+
+    var root_x: c_int = undefined;
+    var root_y: c_int = undefined;
+    var dummy_win: xlib.Window = undefined;
+    var dummy_int: c_int = undefined;
+    var dummy_uint: c_uint = undefined;
+
+    _ = xlib.XQueryPointer(display.handle, display.root, &dummy_win, &dummy_win, &root_x, &root_y, &dummy_int, &dummy_int, &dummy_uint);
+
+    const grab_result = xlib.XGrabPointer(
+        display.handle,
+        display.root,
+        xlib.False,
+        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
+        xlib.GrabModeAsync,
+        xlib.GrabModeAsync,
+        xlib.None,
+        xlib.None,
+        xlib.CurrentTime,
+    );
+
+    if (grab_result != xlib.GrabSuccess) {
+        return;
+    }
+
+    const start_x = client.x;
+    const start_y = client.y;
+    const pointer_start_x = root_x;
+    const pointer_start_y = root_y;
+
+    var event: xlib.XEvent = undefined;
+    var done = false;
+
+    while (!done) {
+        _ = xlib.XNextEvent(display.handle, &event);
+
+        switch (event.type) {
+            xlib.MotionNotify => {
+                const motion = &event.xmotion;
+                const delta_x = motion.x_root - pointer_start_x;
+                const delta_y = motion.y_root - pointer_start_y;
+                tiling.resize(client, start_x + delta_x, start_y + delta_y, client.width, client.height);
+            },
+            xlib.ButtonRelease => {
+                done = true;
+            },
+            else => {},
+        }
+    }
+
+    _ = xlib.XUngrabPointer(display.handle, xlib.CurrentTime);
+    arrange(monitor);
+}
+
+fn resizemouse(display: *Display) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const client = monitor.sel orelse return;
+
+    if (client.is_fullscreen) {
+        return;
+    }
+
+    if (!client.is_floating) {
+        client.is_floating = true;
+    }
+
+    const grab_result = xlib.XGrabPointer(
+        display.handle,
+        display.root,
+        xlib.False,
+        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
+        xlib.GrabModeAsync,
+        xlib.GrabModeAsync,
+        xlib.None,
+        xlib.None,
+        xlib.CurrentTime,
+    );
+
+    if (grab_result != xlib.GrabSuccess) {
+        return;
+    }
+
+    _ = xlib.XWarpPointer(display.handle, xlib.None, client.window, 0, 0, 0, 0, client.width + client.border_width - 1, client.height + client.border_width - 1);
+
+    var event: xlib.XEvent = undefined;
+    var done = false;
+
+    while (!done) {
+        _ = xlib.XNextEvent(display.handle, &event);
+
+        switch (event.type) {
+            xlib.MotionNotify => {
+                const motion = &event.xmotion;
+                const new_width = @max(50, motion.x_root - client.x - 2 * client.border_width + 1);
+                const new_height = @max(50, motion.y_root - client.y - 2 * client.border_width + 1);
+                tiling.resize(client, client.x, client.y, new_width, new_height);
+            },
+            xlib.ButtonRelease => {
+                done = true;
+            },
+            else => {},
+        }
+    }
+
+    _ = xlib.XUngrabPointer(display.handle, xlib.CurrentTime);
+    arrange(monitor);
+}
+
+fn handle_expose(display: *Display, event: *xlib.XExposeEvent) void {
+    if (event.count != 0) return;
+
+    if (bar_mod.bars) |bar| {
+        if (event.window == bar.window) {
+            bar.invalidate();
+            bar.draw(display.handle, &tags);
+        }
+    }
+}
+
+fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
+    if (bar_mod.bars) |bar| {
+        if (event.window == bar.window) {
+            const clicked_tag = bar.handle_click(event.x, &tags);
+            if (clicked_tag) |tag_index| {
+                const tag_mask: u32 = @as(u32, 1) << @intCast(tag_index);
+                view(display, tag_mask);
+            }
+            return;
+        }
+    }
+
+    const client = client_mod.window_to_client(event.window);
+    if (client) |found_client| {
+        focus(display, found_client);
+    }
+
+    const alt_pressed = (event.state & xlib.Mod1Mask) != 0;
+
+    if (alt_pressed and event.button == xlib.Button1) {
+        movemouse(display);
+        return;
+    }
+
+    if (alt_pressed and event.button == xlib.Button3) {
+        resizemouse(display);
+        return;
+    }
+}
+
 fn handle_client_message(display: *Display, event: *xlib.XClientMessageEvent) void {
     const client = client_mod.window_to_client(event.window) orelse return;
 
     if (event.message_type == net_wm_state) {
         const action = event.data.l[0];
         const first_property = @as(xlib.Atom, @intCast(event.data.l[1]));
+        const second_property = @as(xlib.Atom, @intCast(event.data.l[2]));
 
-        if (first_property == net_wm_state_fullscreen) {
+        if (first_property == net_wm_state_fullscreen or second_property == net_wm_state_fullscreen) {
             const net_wm_state_remove = 0;
             const net_wm_state_add = 1;
             const net_wm_state_toggle = 2;
@@ -474,6 +1025,11 @@ fn handle_client_message(display: *Display, event: *xlib.XClientMessageEvent) vo
             } else if (action == net_wm_state_toggle) {
                 set_fullscreen(display, client, !client.is_fullscreen);
             }
+        }
+    } else if (event.message_type == net_active_window) {
+        const selected = monitor_mod.selected_monitor orelse return;
+        if (client != selected.sel and !client.is_urgent) {
+            set_urgent(display, client, true);
         }
     }
 }
@@ -509,6 +1065,8 @@ fn unmanage(display: *Display, client: *Client) void {
     }
 
     client_mod.destroy(client);
+    update_client_list(display);
+    bar_mod.invalidate_bars();
 }
 
 fn handle_enter_notify(display: *Display, event: *xlib.XCrossingEvent) void {
@@ -519,12 +1077,55 @@ fn handle_enter_notify(display: *Display, event: *xlib.XCrossingEvent) void {
     focus(display, client);
 }
 
+fn handle_property_notify(display: *Display, event: *xlib.XPropertyEvent) void {
+    if (event.state == xlib.PropertyDelete) {
+        return;
+    }
+
+    const client = client_mod.window_to_client(event.window) orelse return;
+
+    if (event.atom == xlib.XA_WM_TRANSIENT_FOR) {
+        var trans: xlib.Window = 0;
+        if (!client.is_floating and xlib.XGetTransientForHint(display.handle, client.window, &trans) != 0) {
+            client.is_floating = client_mod.window_to_client(trans) != null;
+            if (client.is_floating) {
+                if (client.monitor) |monitor| {
+                    arrange(monitor);
+                }
+            }
+        }
+    } else if (event.atom == xlib.XA_WM_NORMAL_HINTS) {
+        client.hints_valid = false;
+    } else if (event.atom == xlib.XA_WM_HINTS) {
+        update_wm_hints(display, client);
+        bar_mod.invalidate_bars();
+    } else if (event.atom == xlib.XA_WM_NAME or event.atom == net_wm_name) {
+        update_title(display, client);
+    } else if (event.atom == net_wm_window_type) {
+        update_window_type(display, client);
+    }
+}
+
 fn focus(display: *Display, client: *Client) void {
     if (client.monitor) |monitor| {
+        if (monitor.sel) |old_client| {
+            if (old_client != client) {
+                _ = xlib.XSetWindowBorder(display.handle, old_client.window, border_color_unfocused);
+            }
+        }
+        if (client.is_urgent) {
+            set_urgent(display, client, false);
+        }
         monitor.sel = client;
         monitor_mod.selected_monitor = monitor;
     }
-    _ = xlib.XSetInputFocus(display.handle, client.window, xlib.RevertToPointerRoot, xlib.CurrentTime);
+    _ = xlib.XSetWindowBorder(display.handle, client.window, border_color_focused);
+
+    if (!client.never_focus) {
+        _ = xlib.XSetInputFocus(display.handle, client.window, xlib.RevertToPointerRoot, xlib.CurrentTime);
+        _ = xlib.XChangeProperty(display.handle, display.root, net_active_window, xlib.XA_WINDOW, 32, xlib.PropModeReplace, @ptrCast(&client.window), 1);
+    }
+    _ = send_event(display, client, wm_take_focus);
     _ = xlib.XRaiseWindow(display.handle, client.window);
 }
 
@@ -548,5 +1149,238 @@ fn showhide(monitor: *Monitor) void {
             _ = xlib.XMoveWindow(display, client.window, hidden_x, client.y);
         }
         current = client.next;
+    }
+}
+
+fn update_size_hints(display: *Display, client: *Client) void {
+    var size_hints: xlib.XSizeHints = undefined;
+    var msize: c_long = 0;
+
+    if (xlib.XGetWMNormalHints(display.handle, client.window, &size_hints, &msize) == 0) {
+        size_hints.flags = xlib.PSize;
+    }
+
+    if ((size_hints.flags & xlib.PBaseSize) != 0) {
+        client.base_width = size_hints.base_width;
+        client.base_height = size_hints.base_height;
+    } else if ((size_hints.flags & xlib.PMinSize) != 0) {
+        client.base_width = size_hints.min_width;
+        client.base_height = size_hints.min_height;
+    } else {
+        client.base_width = 0;
+        client.base_height = 0;
+    }
+
+    if ((size_hints.flags & xlib.PResizeInc) != 0) {
+        client.increment_width = size_hints.width_inc;
+        client.increment_height = size_hints.height_inc;
+    } else {
+        client.increment_width = 0;
+        client.increment_height = 0;
+    }
+
+    if ((size_hints.flags & xlib.PMaxSize) != 0) {
+        client.max_width = size_hints.max_width;
+        client.max_height = size_hints.max_height;
+    } else {
+        client.max_width = 0;
+        client.max_height = 0;
+    }
+
+    if ((size_hints.flags & xlib.PMinSize) != 0) {
+        client.min_width = size_hints.min_width;
+        client.min_height = size_hints.min_height;
+    } else if ((size_hints.flags & xlib.PBaseSize) != 0) {
+        client.min_width = size_hints.base_width;
+        client.min_height = size_hints.base_height;
+    } else {
+        client.min_width = 0;
+        client.min_height = 0;
+    }
+
+    if ((size_hints.flags & xlib.PAspect) != 0) {
+        client.min_aspect = @as(f32, @floatFromInt(size_hints.min_aspect.y)) / @as(f32, @floatFromInt(size_hints.min_aspect.x));
+        client.max_aspect = @as(f32, @floatFromInt(size_hints.max_aspect.x)) / @as(f32, @floatFromInt(size_hints.max_aspect.y));
+    } else {
+        client.min_aspect = 0.0;
+        client.max_aspect = 0.0;
+    }
+
+    client.is_fixed = (client.max_width != 0 and client.max_height != 0 and client.max_width == client.min_width and client.max_height == client.min_height);
+    client.hints_valid = true;
+}
+
+fn update_wm_hints(display: *Display, client: *Client) void {
+    const wmh = xlib.XGetWMHints(display.handle, client.window);
+    if (wmh) |hints| {
+        defer _ = xlib.XFree(@ptrCast(hints));
+
+        if (client == (monitor_mod.selected_monitor orelse return).sel and (hints.*.flags & xlib.XUrgencyHint) != 0) {
+            hints.*.flags = hints.*.flags & ~@as(c_long, xlib.XUrgencyHint);
+            _ = xlib.XSetWMHints(display.handle, client.window, hints);
+        } else {
+            client.is_urgent = (hints.*.flags & xlib.XUrgencyHint) != 0;
+        }
+
+        if ((hints.*.flags & xlib.InputHint) != 0) {
+            client.never_focus = hints.*.input == 0;
+        } else {
+            client.never_focus = false;
+        }
+    }
+}
+
+fn update_window_type(display: *Display, client: *Client) void {
+    const state = get_atom_prop(display, client, net_wm_state);
+    const window_type = get_atom_prop(display, client, net_wm_window_type);
+
+    if (state == net_wm_state_fullscreen) {
+        set_fullscreen(display, client, true);
+    }
+    if (window_type == net_wm_window_type_dialog) {
+        client.is_floating = true;
+    }
+}
+
+fn update_title(display: *Display, client: *Client) void {
+    if (!get_text_prop(display, client.window, net_wm_name, &client.name)) {
+        _ = get_text_prop(display, client.window, xlib.XA_WM_NAME, &client.name);
+    }
+    if (client.name[0] == 0) {
+        @memcpy(client.name[0..6], "broken");
+    }
+}
+
+fn get_atom_prop(display: *Display, client: *Client, prop: xlib.Atom) xlib.Atom {
+    var actual_type: xlib.Atom = undefined;
+    var actual_format: c_int = undefined;
+    var num_items: c_ulong = undefined;
+    var bytes_after: c_ulong = undefined;
+    var prop_data: [*c]u8 = undefined;
+
+    if (xlib.XGetWindowProperty(display.handle, client.window, prop, 0, @sizeOf(xlib.Atom), xlib.False, xlib.XA_ATOM, &actual_type, &actual_format, &num_items, &bytes_after, &prop_data) == 0 and prop_data != null) {
+        const atom: xlib.Atom = @as(*xlib.Atom, @ptrCast(@alignCast(prop_data))).*;
+        _ = xlib.XFree(@ptrCast(prop_data));
+        return atom;
+    }
+    return 0;
+}
+
+fn get_text_prop(display: *Display, window: xlib.Window, atom: xlib.Atom, text: *[256]u8) bool {
+    var name: xlib.XTextProperty = undefined;
+
+    if (xlib.XGetTextProperty(display.handle, window, &name, atom) == 0 or name.nitems == 0) {
+        return false;
+    }
+
+    if (name.encoding == xlib.XA_STRING) {
+        const len = @min(name.nitems, 255);
+        @memcpy(text[0..len], name.value[0..len]);
+        text[len] = 0;
+    }
+    _ = xlib.XFree(@ptrCast(name.value));
+    return true;
+}
+
+fn apply_rules(display: *Display, client: *Client) void {
+    var class_hint: xlib.XClassHint = .{ .res_name = null, .res_class = null };
+    _ = xlib.XGetClassHint(display.handle, client.window, &class_hint);
+
+    const class_str: []const u8 = if (class_hint.res_class) |ptr| std.mem.sliceTo(ptr, 0) else "";
+    const instance_str: []const u8 = if (class_hint.res_name) |ptr| std.mem.sliceTo(ptr, 0) else "";
+
+    client.is_floating = false;
+    client.tags = 0;
+
+    for (rules) |rule| {
+        const class_matches = if (rule.class) |rc| std.mem.indexOf(u8, class_str, rc) != null else true;
+        const instance_matches = if (rule.instance) |ri| std.mem.indexOf(u8, instance_str, ri) != null else true;
+        const title_matches = if (rule.title) |rt| std.mem.indexOf(u8, std.mem.sliceTo(&client.name, 0), rt) != null else true;
+
+        if (class_matches and instance_matches and title_matches) {
+            client.is_floating = rule.is_floating;
+            client.tags |= rule.tags;
+            if (rule.monitor >= 0) {
+                var target = monitor_mod.monitors;
+                var index: i32 = 0;
+                while (target) |mon| {
+                    if (index == rule.monitor) {
+                        client.monitor = mon;
+                        break;
+                    }
+                    index += 1;
+                    target = mon.next;
+                }
+            }
+        }
+    }
+
+    if (class_hint.res_class) |ptr| {
+        _ = xlib.XFree(@ptrCast(ptr));
+    }
+    if (class_hint.res_name) |ptr| {
+        _ = xlib.XFree(@ptrCast(ptr));
+    }
+
+    const monitor = client.monitor orelse return;
+    if (client.tags == 0) {
+        client.tags = monitor.tagset[monitor.sel_tags];
+    }
+}
+
+fn update_client_list(display: *Display) void {
+    _ = xlib.XDeleteProperty(display.handle, display.root, net_client_list);
+
+    var current_monitor = monitor_mod.monitors;
+    while (current_monitor) |monitor| {
+        var current_client = monitor.clients;
+        while (current_client) |client| {
+            _ = xlib.XChangeProperty(display.handle, display.root, net_client_list, xlib.XA_WINDOW, 32, xlib.PropModeAppend, @ptrCast(&client.window), 1);
+            current_client = client.next;
+        }
+        current_monitor = monitor.next;
+    }
+}
+
+fn send_event(display: *Display, client: *Client, protocol: xlib.Atom) bool {
+    var protocols: [*c]xlib.Atom = undefined;
+    var num_protocols: c_int = 0;
+    var exists = false;
+
+    if (xlib.XGetWMProtocols(display.handle, client.window, &protocols, &num_protocols) != 0) {
+        var index: usize = 0;
+        while (index < @as(usize, @intCast(num_protocols))) : (index += 1) {
+            if (protocols[index] == protocol) {
+                exists = true;
+                break;
+            }
+        }
+        _ = xlib.XFree(@ptrCast(protocols));
+    }
+
+    if (exists) {
+        var event: xlib.XEvent = undefined;
+        event.type = xlib.ClientMessage;
+        event.xclient.window = client.window;
+        event.xclient.message_type = wm_protocols;
+        event.xclient.format = 32;
+        event.xclient.data.l[0] = @intCast(protocol);
+        event.xclient.data.l[1] = xlib.CurrentTime;
+        _ = xlib.XSendEvent(display.handle, client.window, xlib.False, xlib.NoEventMask, &event);
+    }
+    return exists;
+}
+
+fn set_urgent(display: *Display, client: *Client, urgent: bool) void {
+    client.is_urgent = urgent;
+    const wmh = xlib.XGetWMHints(display.handle, client.window);
+    if (wmh) |hints| {
+        if (urgent) {
+            hints.*.flags = hints.*.flags | xlib.XUrgencyHint;
+        } else {
+            hints.*.flags = hints.*.flags & ~@as(c_long, xlib.XUrgencyHint);
+        }
+        _ = xlib.XSetWMHints(display.handle, client.window, hints);
+        _ = xlib.XFree(@ptrCast(hints));
     }
 }

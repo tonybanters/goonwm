@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
 
     exe.linkSystemLibrary("X11");
     exe.linkSystemLibrary("Xinerama");
+    exe.linkSystemLibrary("Xft");
+    exe.linkSystemLibrary("fontconfig");
     exe.linkLibC();
 
     b.installArtifact(exe);
@@ -37,6 +39,9 @@ pub fn build(b: *std.Build) void {
     const xephyr_multi_step = b.step("xephyr-multi", "Run in Xephyr multi-monitor on :2");
     xephyr_multi_step.dependOn(&add_xephyr_run(b, exe, true).step);
 
+    const multimon_step = b.step("multimon", "Alias for xephyr-multi");
+    multimon_step.dependOn(&add_xephyr_run(b, exe, true).step);
+
     const kill_step = b.step("kill", "Kill Xephyr and goonwm");
     kill_step.dependOn(&b.addSystemCommand(&.{ "sh", "-c", "pkill -9 Xephyr || true; pkill -9 goonwm || true" }).step);
 
@@ -49,7 +54,7 @@ pub fn build(b: *std.Build) void {
 
 fn add_xephyr_run(b: *std.Build, exe: *std.Build.Step.Compile, multimon: bool) *std.Build.Step.Run {
     const kill_cmd = if (multimon)
-        "pkill -9 Xephyr || true; Xephyr +xinerama -screen 640x480 -screen 640x480 :2 & sleep 1"
+        "pkill -9 Xephyr || true; Xephyr +xinerama -glamor -screen 640x480 -screen 640x480 :2 & sleep 1"
     else
         "pkill -9 Xephyr || true; Xephyr -screen 1280x800 :2 & sleep 1";
 

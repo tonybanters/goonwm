@@ -22,6 +22,7 @@
           pkgs.zls
           pkgs.just
           pkgs.alacritty
+          pkgs.st
           pkgs.xorg.xorgserver
           pkgs.xorg.libX11
           pkgs.xorg.libXft
