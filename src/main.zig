@@ -1090,7 +1090,22 @@ fn movemouse(display: *Display) void {
     }
 
     _ = xlib.XUngrabPointer(display.handle, xlib.CurrentTime);
-    arrange(monitor);
+
+    const new_mon = monitor_mod.rect_to_monitor(client.x, client.y, client.width, client.height);
+    if (new_mon != null and new_mon != monitor) {
+        client_mod.detach(client);
+        client_mod.detach_stack(client);
+        client.monitor = new_mon;
+        client.tags = new_mon.?.tagset[new_mon.?.sel_tags];
+        client_mod.attach_aside(client);
+        client_mod.attach_stack(client);
+        monitor_mod.selected_monitor = new_mon;
+        focus(display, client);
+        arrange(monitor);
+        arrange(new_mon.?);
+    } else {
+        arrange(monitor);
+    }
 }
 
 fn resizemouse(display: *Display) void {

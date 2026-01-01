@@ -6,3 +6,4 @@ result
 .direnv/
 .envrc
 vendor/s7.o
+resources/test_configs/
