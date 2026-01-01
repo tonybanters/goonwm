@@ -100,3 +100,7 @@
 
 (rule '((class . "Gimp") (floating . #t)))
 (rule '((class . "Firefox") (tag . 8)))
+
+(button 'client-win '(mod1) 'button1 'move-mouse)
+(button 'client-win '(mod1) 'button2 'toggle-floating)
+(button 'client-win '(mod1) 'button3 'resize-mouse)

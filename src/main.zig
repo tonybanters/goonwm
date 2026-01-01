@@ -319,33 +319,22 @@ fn grab_keybinds(display: *Display) void {
         }
     }
 
-    const mod_key = xlib.Mod4Mask;
-
-    _ = xlib.XGrabButton(
-        display.handle,
-        xlib.Button1,
-        mod_key,
-        display.root,
-        xlib.True,
-        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
-        xlib.GrabModeAsync,
-        xlib.GrabModeAsync,
-        xlib.None,
-        xlib.None,
-    );
-
-    _ = xlib.XGrabButton(
-        display.handle,
-        xlib.Button3,
-        mod_key,
-        display.root,
-        xlib.True,
-        xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
-        xlib.GrabModeAsync,
-        xlib.GrabModeAsync,
-        xlib.None,
-        xlib.None,
-    );
+    for (config.buttons.items) |button| {
+        if (button.click == .client_win) {
+            _ = xlib.XGrabButton(
+                display.handle,
+                @intCast(button.button),
+                button.mod_mask,
+                display.root,
+                xlib.True,
+                xlib.ButtonPressMask | xlib.ButtonReleaseMask | xlib.PointerMotionMask,
+                xlib.GrabModeAsync,
+                xlib.GrabModeAsync,
+                xlib.None,
+                xlib.None,
+            );
+        }
+    }
 
     std.debug.print("grabbed {d} keybinds from config\n", .{config.keybinds.items.len});
 }
@@ -1174,16 +1163,25 @@ fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
         focus(display, found_client);
     }
 
-    const alt_pressed = (event.state & xlib.Mod1Mask) != 0;
-
-    if (alt_pressed and event.button == xlib.Button1) {
-        movemouse(display);
-        return;
-    }
-
-    if (alt_pressed and event.button == xlib.Button3) {
-        resizemouse(display);
-        return;
+    for (config.buttons.items) |button| {
+        if (button.click != .client_win) continue;
+        const mod_match = (event.state & button.mod_mask) == button.mod_mask;
+        const button_match = event.button == button.button;
+        if (mod_match and button_match) {
+            switch (button.action) {
+                .move_mouse => movemouse(display),
+                .resize_mouse => resizemouse(display),
+                .toggle_floating => {
+                    if (client) |c| {
+                        c.is_floating = !c.is_floating;
+                        if (monitor_mod.selected_monitor) |mon| {
+                            arrange(mon);
+                        }
+                    }
+                },
+            }
+            return;
+        }
     }
 }
 

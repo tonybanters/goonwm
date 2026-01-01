@@ -53,6 +53,25 @@ pub const BlockType = enum {
     battery,
 };
 
+pub const ClickTarget = enum {
+    client_win,
+    root_win,
+    tag_bar,
+};
+
+pub const MouseAction = enum {
+    move_mouse,
+    resize_mouse,
+    toggle_floating,
+};
+
+pub const MouseButton = struct {
+    click: ClickTarget,
+    mod_mask: u32,
+    button: u32,
+    action: MouseAction,
+};
+
 pub const Block = struct {
     block_type: BlockType,
     format: []const u8,
@@ -86,6 +105,7 @@ pub const Config = struct {
     keybinds: std.ArrayListUnmanaged(Keybind) = .{},
     rules: std.ArrayListUnmanaged(Rule) = .{},
     blocks: std.ArrayListUnmanaged(Block) = .{},
+    buttons: std.ArrayListUnmanaged(MouseButton) = .{},
 
     pub fn init(allocator: std.mem.Allocator) Config {
         return Config{
@@ -97,6 +117,7 @@ pub const Config = struct {
         self.keybinds.deinit(self.allocator);
         self.rules.deinit(self.allocator);
         self.blocks.deinit(self.allocator);
+        self.buttons.deinit(self.allocator);
     }
 
     pub fn add_keybind(self: *Config, keybind: Keybind) !void {
@@ -109,6 +130,10 @@ pub const Config = struct {
 
     pub fn add_block(self: *Config, block: Block) !void {
         try self.blocks.append(self.allocator, block);
+    }
+
+    pub fn add_button(self: *Config, button: MouseButton) !void {
+        try self.buttons.append(self.allocator, button);
     }
 };
 

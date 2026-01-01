@@ -6,6 +6,9 @@ const Action = config_mod.Action;
 const Rule = config_mod.Rule;
 const Block = config_mod.Block;
 const BlockType = config_mod.BlockType;
+const MouseButton = config_mod.MouseButton;
+const ClickTarget = config_mod.ClickTarget;
+const MouseAction = config_mod.MouseAction;
 
 const s7 = @cImport({
     @cInclude("s7.h");
@@ -55,6 +58,7 @@ fn register_functions() void {
     _ = s7.s7_define_function(scm, "set-font!", &scm_set_font, 1, 0, false, "");
     _ = s7.s7_define_function(scm, "set-tags!", &scm_set_tags, 1, 0, false, "");
     _ = s7.s7_define_function(scm, "border-width!", &scm_border_width, 1, 0, false, "");
+    _ = s7.s7_define_function(scm, "button", &scm_button, 4, 0, false, "");
     _ = s7.s7_define_function(scm, "border-focused!", &scm_border_focused, 1, 0, false, "");
     _ = s7.s7_define_function(scm, "border-unfocused!", &scm_border_unfocused, 1, 0, false, "");
     _ = s7.s7_define_function(scm, "gaps-inner!", &scm_gaps_inner, 2, 0, false, "");
@@ -218,6 +222,71 @@ fn scm_set_tags(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_poi
         tags_list = s7.s7_cdr(tags_list);
         index += 1;
     }
+    return s7.s7_t(scm);
+}
+
+fn scm_button(scm: ?*s7.s7_scheme, args: s7.s7_pointer) callconv(.c) s7.s7_pointer {
+    const cfg = config orelse return s7.s7_f(scm);
+
+    const click_sym = s7.s7_car(args);
+    const mods_list = s7.s7_cadr(args);
+    const button_sym = s7.s7_caddr(args);
+    const action_sym = s7.s7_cadddr(args);
+
+    var click: ClickTarget = .client_win;
+    if (s7.s7_is_symbol(click_sym)) {
+        const click_name = s7.s7_symbol_name(click_sym);
+        if (click_name != null) {
+            const name = std.mem.sliceTo(click_name, 0);
+            if (std.mem.eql(u8, name, "client-win")) {
+                click = .client_win;
+            } else if (std.mem.eql(u8, name, "root-win")) {
+                click = .root_win;
+            } else if (std.mem.eql(u8, name, "tag-bar")) {
+                click = .tag_bar;
+            }
+        }
+    }
+
+    const mod_mask = parse_modifiers(mods_list);
+
+    var button: u32 = 1;
+    if (s7.s7_is_symbol(button_sym)) {
+        const button_name = s7.s7_symbol_name(button_sym);
+        if (button_name != null) {
+            const name = std.mem.sliceTo(button_name, 0);
+            if (std.mem.eql(u8, name, "button1")) {
+                button = 1;
+            } else if (std.mem.eql(u8, name, "button2")) {
+                button = 2;
+            } else if (std.mem.eql(u8, name, "button3")) {
+                button = 3;
+            }
+        }
+    }
+
+    var action: MouseAction = .move_mouse;
+    if (s7.s7_is_symbol(action_sym)) {
+        const action_name = s7.s7_symbol_name(action_sym);
+        if (action_name != null) {
+            const name = std.mem.sliceTo(action_name, 0);
+            if (std.mem.eql(u8, name, "move-mouse")) {
+                action = .move_mouse;
+            } else if (std.mem.eql(u8, name, "resize-mouse")) {
+                action = .resize_mouse;
+            } else if (std.mem.eql(u8, name, "toggle-floating")) {
+                action = .toggle_floating;
+            }
+        }
+    }
+
+    cfg.add_button(.{
+        .click = click,
+        .mod_mask = mod_mask,
+        .button = button,
+        .action = action,
+    }) catch return s7.s7_f(scm);
+
     return s7.s7_t(scm);
 }
 
