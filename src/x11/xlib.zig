@@ -87,6 +87,7 @@ pub const XK_Return = c.XK_Return;
 pub const XK_p = c.XK_p;
 pub const XK_a = c.XK_a;
 pub const XK_s = c.XK_s;
+pub const XK_0 = c.XK_0;
 pub const XK_1 = c.XK_1;
 pub const XK_2 = c.XK_2;
 pub const XK_3 = c.XK_3;
