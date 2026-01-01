@@ -11,6 +11,24 @@ pub const layout = monitor_mod.Layout{
     .arrange_fn = tile,
 };
 
+pub var display_handle: ?*xlib.Display = null;
+pub var screen_width: i32 = 0;
+pub var screen_height: i32 = 0;
+pub var bar_height: i32 = 0;
+
+pub fn set_display(display: *xlib.Display) void {
+    display_handle = display;
+}
+
+pub fn set_screen_size(width: i32, height: i32) void {
+    screen_width = width;
+    screen_height = height;
+}
+
+pub fn set_bar_height(height: i32) void {
+    bar_height = height;
+}
+
 pub fn tile(monitor: *Monitor) void {
     var gap_outer_h: i32 = 0;
     var gap_outer_v: i32 = 0;
@@ -51,13 +69,13 @@ pub fn tile(monitor: *Monitor) void {
     while (current) |client| : (current = client_mod.next_tiled(client.next)) {
         if (index < nmaster_count) {
             const height = @as(i32, @intFromFloat(@as(f32, @floatFromInt(master_height)) / master_facts)) + (if (index < @as(u32, @intCast(master_rest))) @as(i32, 1) else @as(i32, 0)) - 2 * client.border_width;
-            resize(client, master_x, master_y, master_width - 2 * client.border_width, height);
-            master_y += client_height(client) + gap_inner_h;
+            resize(client, master_x, master_y, master_width - 2 * client.border_width, height, false);
+            master_y += get_client_height(client) + gap_inner_h;
         } else {
             const stack_index = index - nmaster_count;
             const height = @as(i32, @intFromFloat(@as(f32, @floatFromInt(stack_height)) / stack_facts)) + (if (stack_index < @as(u32, @intCast(stack_rest))) @as(i32, 1) else @as(i32, 0)) - 2 * client.border_width;
-            resize(client, stack_x, stack_y, stack_width - 2 * client.border_width, height);
-            stack_y += client_height(client) + gap_inner_h;
+            resize(client, stack_x, stack_y, stack_width - 2 * client.border_width, height, false);
+            stack_y += get_client_height(client) + gap_inner_h;
         }
         index += 1;
     }
@@ -104,32 +122,158 @@ fn get_facts(monitor: *Monitor, master_size: i32, stack_size: i32, master_factor
     stack_rest.* = stack_size - stack_total;
 }
 
-fn client_width(client: *Client) i32 {
+fn get_client_width(client: *Client) i32 {
     return client.width + 2 * client.border_width;
 }
 
-fn client_height(client: *Client) i32 {
+fn get_client_height(client: *Client) i32 {
     return client.height + 2 * client.border_width;
 }
 
-pub var display_handle: ?*xlib.Display = null;
+pub fn apply_size_hints(client: *Client, target_x: *i32, target_y: *i32, target_width: *i32, target_height: *i32, interact: bool) bool {
+    const monitor = client.monitor orelse return false;
 
-pub fn set_display(display: *xlib.Display) void {
-    display_handle = display;
+    target_width.* = @max(1, target_width.*);
+    target_height.* = @max(1, target_height.*);
+
+    if (interact) {
+        if (target_x.* > screen_width) {
+            target_x.* = screen_width - get_client_width(client);
+        }
+        if (target_y.* > screen_height) {
+            target_y.* = screen_height - get_client_height(client);
+        }
+        if (target_x.* + target_width.* + 2 * client.border_width < 0) {
+            target_x.* = 0;
+        }
+        if (target_y.* + target_height.* + 2 * client.border_width < 0) {
+            target_y.* = 0;
+        }
+    } else {
+        if (target_x.* >= monitor.win_x + monitor.win_w) {
+            target_x.* = monitor.win_x + monitor.win_w - get_client_width(client);
+        }
+        if (target_y.* >= monitor.win_y + monitor.win_h) {
+            target_y.* = monitor.win_y + monitor.win_h - get_client_height(client);
+        }
+        if (target_x.* + target_width.* + 2 * client.border_width <= monitor.win_x) {
+            target_x.* = monitor.win_x;
+        }
+        if (target_y.* + target_height.* + 2 * client.border_width <= monitor.win_y) {
+            target_y.* = monitor.win_y;
+        }
+    }
+
+    if (target_height.* < bar_height) {
+        target_height.* = bar_height;
+    }
+    if (target_width.* < bar_height) {
+        target_width.* = bar_height;
+    }
+
+    if (client.is_floating or monitor.lt[monitor.sel_lt] == null) {
+        const base_is_min = client.base_width == client.min_width and client.base_height == client.min_height;
+
+        var adjusted_width = target_width.*;
+        var adjusted_height = target_height.*;
+
+        if (!base_is_min) {
+            adjusted_width -= client.base_width;
+            adjusted_height -= client.base_height;
+        }
+
+        if (client.min_aspect > 0 and client.max_aspect > 0) {
+            const width_float: f32 = @floatFromInt(adjusted_width);
+            const height_float: f32 = @floatFromInt(adjusted_height);
+            if (client.max_aspect < width_float / height_float) {
+                adjusted_width = @intFromFloat(height_float * client.max_aspect + 0.5);
+            } else if (client.min_aspect < height_float / width_float) {
+                adjusted_height = @intFromFloat(width_float * client.min_aspect + 0.5);
+            }
+        }
+
+        if (base_is_min) {
+            adjusted_width -= client.base_width;
+            adjusted_height -= client.base_height;
+        }
+
+        if (client.increment_width > 0) {
+            adjusted_width -= @mod(adjusted_width, client.increment_width);
+        }
+        if (client.increment_height > 0) {
+            adjusted_height -= @mod(adjusted_height, client.increment_height);
+        }
+
+        target_width.* = @max(adjusted_width + client.base_width, client.min_width);
+        target_height.* = @max(adjusted_height + client.base_height, client.min_height);
+
+        if (client.max_width > 0) {
+            target_width.* = @min(target_width.*, client.max_width);
+        }
+        if (client.max_height > 0) {
+            target_height.* = @min(target_height.*, client.max_height);
+        }
+    }
+
+    return target_x.* != client.x or target_y.* != client.y or target_width.* != client.width or target_height.* != client.height;
 }
 
-pub fn resize(client: *Client, x: i32, y: i32, width: i32, height: i32) void {
+pub fn resize(client: *Client, target_x: i32, target_y: i32, target_width: i32, target_height: i32, interact: bool) void {
+    var final_x = target_x;
+    var final_y = target_y;
+    var final_width = target_width;
+    var final_height = target_height;
+
+    if (apply_size_hints(client, &final_x, &final_y, &final_width, &final_height, interact)) {
+        resize_client(client, final_x, final_y, final_width, final_height);
+    }
+}
+
+pub fn resize_client(client: *Client, target_x: i32, target_y: i32, target_width: i32, target_height: i32) void {
     client.old_x = client.x;
     client.old_y = client.y;
     client.old_width = client.width;
     client.old_height = client.height;
-    client.x = x;
-    client.y = y;
-    client.width = @max(1, width);
-    client.height = @max(1, height);
+    client.x = target_x;
+    client.y = target_y;
+    client.width = target_width;
+    client.height = target_height;
 
-    if (display_handle) |display| {
-        _ = xlib.XMoveResizeWindow(display, client.window, x, y, @intCast(@max(1, width)), @intCast(@max(1, height)));
-        _ = xlib.XSync(display, xlib.False);
-    }
+    const display = display_handle orelse return;
+
+    var window_changes: xlib.c.XWindowChanges = undefined;
+    window_changes.x = target_x;
+    window_changes.y = target_y;
+    window_changes.width = @intCast(@max(1, target_width));
+    window_changes.height = @intCast(@max(1, target_height));
+    window_changes.border_width = client.border_width;
+
+    _ = xlib.c.XConfigureWindow(
+        display,
+        client.window,
+        xlib.c.CWX | xlib.c.CWY | xlib.c.CWWidth | xlib.c.CWHeight | xlib.c.CWBorderWidth,
+        &window_changes,
+    );
+
+    send_configure(client);
+    _ = xlib.XSync(display, xlib.False);
+}
+
+pub fn send_configure(client: *Client) void {
+    const display = display_handle orelse return;
+
+    var configure_event: xlib.c.XConfigureEvent = undefined;
+    configure_event.type = xlib.c.ConfigureNotify;
+    configure_event.display = display;
+    configure_event.event = client.window;
+    configure_event.window = client.window;
+    configure_event.x = client.x;
+    configure_event.y = client.y;
+    configure_event.width = client.width;
+    configure_event.height = client.height;
+    configure_event.border_width = client.border_width;
+    configure_event.above = xlib.None;
+    configure_event.override_redirect = xlib.False;
+
+    _ = xlib.c.XSendEvent(display, client.window, xlib.False, xlib.StructureNotifyMask, @ptrCast(&configure_event));
 }

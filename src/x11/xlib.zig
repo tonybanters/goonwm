@@ -66,6 +66,7 @@ pub const GrabModeAsync = c.GrabModeAsync;
 pub const RevertToPointerRoot = c.RevertToPointerRoot;
 pub const CurrentTime = c.CurrentTime;
 pub const NotifyNormal = c.NotifyNormal;
+pub const NotifyInferior = c.NotifyInferior;
 
 pub const True = c.True;
 pub const False = c.False;
@@ -251,3 +252,7 @@ pub const XDefineCursor = c.XDefineCursor;
 pub const XC_left_ptr = c.XC_left_ptr;
 pub const XC_sizing = c.XC_sizing;
 pub const XC_fleur = c.XC_fleur;
+
+pub const XAllowEvents = c.XAllowEvents;
+pub const ReplayPointer = c.ReplayPointer;
+pub const AnyButton = c.AnyButton;

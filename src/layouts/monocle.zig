@@ -24,6 +24,7 @@ pub fn monocle(monitor: *Monitor) void {
             monitor.win_y + gap_h,
             monitor.win_w - 2 * gap_v - 2 * client.border_width,
             monitor.win_h - 2 * gap_h - 2 * client.border_width,
+            false,
         );
         current = client_mod.next_tiled(client.next);
     }
