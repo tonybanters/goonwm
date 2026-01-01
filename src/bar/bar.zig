@@ -166,7 +166,7 @@ pub const Bar = struct {
                 self.fill_rect(display, x_position, self.height - 3, tag_width, 3, scheme.border);
             }
 
-            const text_y = @divTrunc(self.height + self.font_height, 2) - 2;
+            const text_y = @divTrunc(self.height + self.font_height, 2) - 4;
             self.draw_text(display, x_position + padding, text_y, tag, scheme.foreground);
 
             x_position += tag_width;
@@ -176,7 +176,7 @@ pub const Bar = struct {
 
         if (monitor.lt[monitor.sel_lt]) |layout| {
             const symbol = layout.symbol;
-            self.draw_text(display, x_position, @divTrunc(self.height + self.font_height, 2) - 2, symbol, self.scheme_normal.foreground);
+            self.draw_text(display, x_position, @divTrunc(self.height + self.font_height, 2) - 4, symbol, self.scheme_normal.foreground);
             x_position += self.text_width(display, symbol) + padding;
         }
 
@@ -188,7 +188,7 @@ pub const Bar = struct {
             const content = block.getContent();
             const content_width = self.text_width(display, content);
             block_x -= content_width;
-            self.draw_text(display, block_x, @divTrunc(self.height + self.font_height, 2) - 2, content, block.color());
+            self.draw_text(display, block_x, @divTrunc(self.height + self.font_height, 2) - 4, content, block.color());
             if (block.underline) {
                 self.fill_rect(display, block_x, self.height - 2, content_width, 2, block.color());
             }

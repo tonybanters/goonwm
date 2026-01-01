@@ -6,6 +6,9 @@ const Action = config_mod.Action;
 const Rule = config_mod.Rule;
 const Block = config_mod.Block;
 const BlockType = config_mod.BlockType;
+const MouseButton = config_mod.MouseButton;
+const ClickTarget = config_mod.ClickTarget;
+const MouseAction = config_mod.MouseAction;
 
 const c = @cImport({
     @cInclude("goonconf.h");
@@ -59,6 +62,7 @@ fn register_functions() void {
     c.goonconf_register(context, "gaps-inner!", gc_gaps_inner);
     c.goonconf_register(context, "gaps-outer!", gc_gaps_outer);
     c.goonconf_register(context, "bind", gc_bind);
+    c.goonconf_register(context, "button", gc_button);
     c.goonconf_register(context, "rule", gc_rule);
     c.goonconf_register(context, "block-static", gc_block_static);
     c.goonconf_register(context, "block-datetime", gc_block_datetime);
@@ -322,6 +326,61 @@ fn gc_bind(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c)
         .action = action,
         .int_arg = int_arg,
         .str_arg = str_arg,
+    }) catch return c.goonconf_nil(context);
+
+    return c.goonconf_nil(context);
+}
+
+fn gc_button(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
+    const cfg = config orelse return c.goonconf_nil(context);
+
+    const click_sym = c.goonconf_list_nth(args, 0);
+    const mods_list = c.goonconf_list_nth(args, 1);
+    const button_sym = c.goonconf_list_nth(args, 2);
+    const action_sym = c.goonconf_list_nth(args, 3);
+
+    const click_str = get_string_from_symbol(click_sym) orelse return c.goonconf_nil(context);
+    const button_str = get_string_from_symbol(button_sym) orelse return c.goonconf_nil(context);
+    const action_str = get_string_from_symbol(action_sym) orelse return c.goonconf_nil(context);
+
+    const click: ClickTarget = if (std.mem.eql(u8, click_str, "client-win"))
+        .client_win
+    else if (std.mem.eql(u8, click_str, "root-win"))
+        .root_win
+    else if (std.mem.eql(u8, click_str, "tag-bar"))
+        .tag_bar
+    else
+        return c.goonconf_nil(context);
+
+    const mod_mask = parse_modifiers(mods_list);
+
+    const button: u32 = if (std.mem.eql(u8, button_str, "button1"))
+        1
+    else if (std.mem.eql(u8, button_str, "button2"))
+        2
+    else if (std.mem.eql(u8, button_str, "button3"))
+        3
+    else if (std.mem.eql(u8, button_str, "button4"))
+        4
+    else if (std.mem.eql(u8, button_str, "button5"))
+        5
+    else
+        return c.goonconf_nil(context);
+
+    const action: MouseAction = if (std.mem.eql(u8, action_str, "move-mouse"))
+        .move_mouse
+    else if (std.mem.eql(u8, action_str, "resize-mouse"))
+        .resize_mouse
+    else if (std.mem.eql(u8, action_str, "toggle-floating"))
+        .toggle_floating
+    else
+        return c.goonconf_nil(context);
+
+    cfg.add_button(.{
+        .click = click,
+        .mod_mask = mod_mask,
+        .button = button,
+        .action = action,
     }) catch return c.goonconf_nil(context);
 
     return c.goonconf_nil(context);
