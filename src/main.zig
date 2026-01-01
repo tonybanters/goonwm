@@ -1058,6 +1058,7 @@ fn movemouse(display: *Display) void {
         return;
     }
 
+    const was_floating = client.is_floating;
     if (!client.is_floating) {
         client.is_floating = true;
     }
@@ -1127,6 +1128,19 @@ fn movemouse(display: *Display) void {
         arrange(new_mon.?);
     } else {
         arrange(monitor);
+    }
+
+    if (config.auto_tile and !was_floating) {
+        const drop_monitor = client.monitor orelse return;
+        const center_x = client.x + @divTrunc(client.width, 2);
+        const center_y = client.y + @divTrunc(client.height, 2);
+
+        if (client_mod.tiled_window_at(client, drop_monitor, center_x, center_y)) |target| {
+            client_mod.insert_before(client, target);
+        }
+
+        client.is_floating = false;
+        arrange(drop_monitor);
     }
 }
 

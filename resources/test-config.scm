@@ -19,6 +19,8 @@
 (gaps-inner! 5 5)
 (gaps-outer! 5 5)
 
+(auto-tile! #t)
+
 ;; bar blocks (right side, rendered right-to-left)
 ;; syntax: (block-xxx ... color)        = underline on (default)
 ;;         (block-xxx ... color #f)     = underline off

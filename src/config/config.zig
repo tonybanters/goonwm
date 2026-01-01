@@ -102,6 +102,8 @@ pub const Config = struct {
     gap_outer_h: i32 = 5,
     gap_outer_v: i32 = 5,
 
+    auto_tile: bool = false,
+
     keybinds: std.ArrayListUnmanaged(Keybind) = .{},
     rules: std.ArrayListUnmanaged(Rule) = .{},
     blocks: std.ArrayListUnmanaged(Block) = .{},

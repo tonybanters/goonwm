@@ -93,6 +93,7 @@ fn register_functions() void {
     c.goonconf_register(context, "focus-monitor", gc_focus_monitor);
     c.goonconf_register(context, "send-to-monitor", gc_send_to_monitor);
     c.goonconf_register(context, "reload-config", gc_reload_config);
+    c.goonconf_register(context, "auto-tile!", gc_auto_tile);
 }
 
 fn get_string(val: ?*c.goonconf_value_t) ?[]const u8 {
@@ -651,4 +652,10 @@ fn gc_send_to_monitor(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) c
 
 fn gc_reload_config(context: ?*c.goonconf_ctx_t, _: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
     return c.goonconf_symbol(context, "reload-config");
+}
+
+fn gc_auto_tile(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
+    const cfg = config orelse return c.goonconf_nil(context);
+    cfg.auto_tile = get_bool(c.goonconf_car(args), false);
+    return c.goonconf_nil(context);
 }

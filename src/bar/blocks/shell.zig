@@ -22,6 +22,8 @@ pub const Shell = struct {
             .allocator = std.heap.page_allocator,
             .argv = &.{ "/bin/sh", "-c", self.command },
         }) catch return buffer[0..0];
+        defer std.heap.page_allocator.free(result.stdout);
+        defer std.heap.page_allocator.free(result.stderr);
 
         var cmd_len = @min(result.stdout.len, cmd_output.len);
         @memcpy(cmd_output[0..cmd_len], result.stdout[0..cmd_len]);

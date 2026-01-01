@@ -164,6 +164,51 @@ pub fn count_tiled(monitor: *Monitor) u32 {
     return count;
 }
 
+pub fn tiled_window_at(exclude: *Client, monitor: *Monitor, point_x: i32, point_y: i32) ?*Client {
+    const tags = monitor.tagset[monitor.sel_tags];
+    var current = monitor.clients;
+
+    while (current) |client| {
+        if (client != exclude and !client.is_floating and (client.tags & tags) != 0) {
+            const client_x = client.x;
+            const client_y = client.y;
+            const client_w = client.width + client.border_width * 2;
+            const client_h = client.height + client.border_width * 2;
+
+            if (point_x >= client_x and point_x < client_x + client_w and
+                point_y >= client_y and point_y < client_y + client_h)
+            {
+                return client;
+            }
+        }
+        current = client.next;
+    }
+    return null;
+}
+
+pub fn insert_before(client: *Client, target: *Client) void {
+    const monitor = target.monitor orelse return;
+    if (client.monitor != monitor) return;
+
+    detach(client);
+
+    if (monitor.clients == target) {
+        client.next = target;
+        monitor.clients = client;
+        return;
+    }
+
+    var current = monitor.clients;
+    while (current) |iter| {
+        if (iter.next == target) {
+            client.next = target;
+            iter.next = client;
+            return;
+        }
+        current = iter.next;
+    }
+}
+
 pub fn swap_clients(client_a: *Client, client_b: *Client) void {
     const monitor = client_a.monitor orelse return;
     if (client_b.monitor != monitor) return;

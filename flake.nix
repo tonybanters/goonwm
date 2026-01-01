@@ -31,6 +31,7 @@
           pkgs.freetype
           pkgs.fontconfig
           pkgs.pkg-config
+          pkgs.valgrind
         ];
         shellHook = ''
           export PS1="(goonwm-dev) $PS1"
