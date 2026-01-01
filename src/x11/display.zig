@@ -35,7 +35,7 @@ pub const Display = struct {
         _ = xlib.XSelectInput(
             self.handle,
             self.root,
-            xlib.SubstructureRedirectMask | xlib.SubstructureNotifyMask,
+            xlib.SubstructureRedirectMask | xlib.SubstructureNotifyMask | xlib.PointerMotionMask,
         );
         _ = xlib.XSync(self.handle, xlib.False);
 
