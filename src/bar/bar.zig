@@ -33,6 +33,7 @@ pub const Bar = struct {
     allocator: std.mem.Allocator,
     blocks: std.ArrayList(Block),
     needs_redraw: bool,
+    next: ?*Bar,
 
     pub fn create(
         allocator: std.mem.Allocator,
@@ -109,6 +110,7 @@ pub const Bar = struct {
             .allocator = allocator,
             .blocks = .{},
             .needs_redraw = true,
+            .next = null,
         };
 
         monitor.bar_win = window;
@@ -303,7 +305,20 @@ pub fn draw_bars(display: *xlib.Display, tags: []const []const u8) void {
 }
 
 pub fn invalidate_bars() void {
-    if (bars) |bar| {
+    var current = bars;
+    while (current) |bar| {
         bar.invalidate();
+        current = bar.next;
     }
+}
+
+pub fn window_to_bar(win: xlib.Window) ?*Bar {
+    var current = bars;
+    while (current) |bar| {
+        if (bar.window == win) {
+            return bar;
+        }
+        current = bar.next;
+    }
+    return null;
 }

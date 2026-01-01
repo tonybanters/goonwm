@@ -9,7 +9,7 @@ const monocle = @import("layouts/monocle.zig");
 const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
-const scheme_mod = @import("config/scheme.zig");
+const goonconf = @import("config/goonconf.zig");
 
 const Display = display_mod.Display;
 const Client = client_mod.Client;
@@ -70,11 +70,11 @@ pub fn main() !void {
     defer config.deinit();
     config_mod.set_config(&config);
 
-    if (scheme_mod.init(&config)) {
+    if (goonconf.init(&config)) {
         const loaded = if (config_path) |path|
-            scheme_mod.load_file(path)
+            goonconf.load_file(path)
         else
-            scheme_mod.load_config();
+            goonconf.load_config();
 
         if (loaded) {
             config_path_global = config_path;
@@ -89,7 +89,7 @@ pub fn main() !void {
             setup_default_keybinds();
         }
     } else {
-        std.debug.print("failed to init scheme, using defaults\n", .{});
+        std.debug.print("failed to init goonconf, using defaults\n", .{});
         setup_default_keybinds();
     }
 
@@ -115,6 +115,7 @@ pub fn main() !void {
     setup_cursors(&display);
     client_mod.init(allocator);
     monitor_mod.init(allocator);
+    monitor_mod.set_root_window(display.root, display.handle);
     tiling.set_display(display.handle);
 
     setup_monitors(&display);
@@ -125,7 +126,7 @@ pub fn main() !void {
     std.debug.print("entering event loop\n", .{});
     run_event_loop(&display);
 
-    scheme_mod.deinit();
+    goonconf.deinit();
     std.debug.print("goonwm exiting\n", .{});
 }
 
@@ -169,6 +170,8 @@ fn setup_cursors(display: *Display) void {
 
 fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
     var current_monitor = monitor_mod.monitors;
+    var last_bar: ?*bar_mod.Bar = null;
+
     while (current_monitor) |monitor| {
         const bar = bar_mod.Bar.create(allocator, display.handle, display.screen, monitor, config.font);
         if (bar) |created_bar| {
@@ -182,8 +185,14 @@ fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
                 created_bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
                 created_bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
             }
-            bar_mod.bars = created_bar;
-            std.debug.print("bar created for monitor\n", .{});
+
+            if (last_bar) |prev| {
+                prev.next = created_bar;
+            } else {
+                bar_mod.bars = created_bar;
+            }
+            last_bar = created_bar;
+            std.debug.print("bar created for monitor {d}\n", .{monitor.num});
         }
         current_monitor = monitor.next;
     }
@@ -374,9 +383,11 @@ fn run_event_loop(display: *Display) void {
             handle_event(display, &event);
         }
 
-        if (bar_mod.bars) |bar| {
+        var current_bar = bar_mod.bars;
+        while (current_bar) |bar| {
             bar.update_blocks();
             bar.draw(display.handle, &tags);
+            current_bar = bar.next;
         }
 
         _ = std.posix.poll(&fds, 1000) catch 0;
@@ -393,6 +404,7 @@ fn handle_event(display: *Display, event: *xlib.XEvent) void {
         .destroy_notify => handle_destroy_notify(display, &event.xdestroywindow),
         .unmap_notify => handle_unmap_notify(display, &event.xunmap),
         .enter_notify => handle_enter_notify(display, &event.xcrossing),
+        .motion_notify => handle_motion_notify(display, &event.xmotion),
         .client_message => handle_client_message(display, &event.xclient),
         .button_press => handle_button_press(display, &event.xbutton),
         .expose => handle_expose(display, &event.xexpose),
@@ -589,9 +601,9 @@ fn reload_config(display: *Display) void {
     config.blocks.clearRetainingCapacity();
 
     const loaded = if (config_path_global) |path|
-        scheme_mod.load_file(path)
+        goonconf.load_file(path)
     else
-        scheme_mod.load_config();
+        goonconf.load_config();
 
     if (loaded) {
         if (config_path_global) |path| {
@@ -624,7 +636,7 @@ fn rebuild_bar_blocks() void {
             bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
             bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
         }
-        current_bar = null; // TODO: bar linked list if multiple monitors
+        current_bar = bar.next;
     }
 }
 
@@ -1138,24 +1150,23 @@ fn resizemouse(display: *Display) void {
 fn handle_expose(display: *Display, event: *xlib.XExposeEvent) void {
     if (event.count != 0) return;
 
-    if (bar_mod.bars) |bar| {
-        if (event.window == bar.window) {
-            bar.invalidate();
-            bar.draw(display.handle, &tags);
-        }
+    if (bar_mod.window_to_bar(event.window)) |bar| {
+        bar.invalidate();
+        bar.draw(display.handle, &tags);
     }
 }
 
 fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
-    if (bar_mod.bars) |bar| {
-        if (event.window == bar.window) {
-            const clicked_tag = bar.handle_click(event.x, &tags);
-            if (clicked_tag) |tag_index| {
-                const tag_mask: u32 = @as(u32, 1) << @intCast(tag_index);
-                view(display, tag_mask);
-            }
-            return;
+    if (bar_mod.window_to_bar(event.window)) |bar| {
+        if (bar.monitor != monitor_mod.selected_monitor) {
+            monitor_mod.selected_monitor = bar.monitor;
         }
+        const clicked_tag = bar.handle_click(event.x, &tags);
+        if (clicked_tag) |tag_index| {
+            const tag_mask: u32 = @as(u32, 1) << @intCast(tag_index);
+            view(display, tag_mask);
+        }
+        return;
     }
 
     const client = client_mod.window_to_client(event.window);
@@ -1253,8 +1264,44 @@ fn handle_enter_notify(display: *Display, event: *xlib.XCrossingEvent) void {
     if (event.mode != xlib.NotifyNormal) {
         return;
     }
-    const client = client_mod.window_to_client(event.window) orelse return;
-    focus(display, client);
+
+    const client = client_mod.window_to_client(event.window);
+    const target_mon = if (client) |c| c.monitor else monitor_mod.window_to_monitor(event.window);
+
+    if (target_mon) |mon| {
+        if (mon != monitor_mod.selected_monitor) {
+            unfocus(display);
+            monitor_mod.selected_monitor = mon;
+        }
+    }
+
+    if (client) |c| {
+        focus(display, c);
+    } else if (target_mon != null and target_mon != monitor_mod.selected_monitor) {
+        if (target_mon.?.sel) |sel| {
+            focus(display, sel);
+        }
+    }
+}
+
+var last_motion_monitor: ?*Monitor = null;
+
+fn handle_motion_notify(display: *Display, event: *xlib.XMotionEvent) void {
+    if (event.window != display.root) {
+        return;
+    }
+
+    const mon = monitor_mod.rect_to_monitor(event.x_root, event.y_root, 1, 1);
+    if (mon != last_motion_monitor and last_motion_monitor != null) {
+        unfocus(display);
+        monitor_mod.selected_monitor = mon;
+        if (mon) |m| {
+            if (m.sel) |sel| {
+                focus(display, sel);
+            }
+        }
+    }
+    last_motion_monitor = mon;
 }
 
 fn handle_property_notify(display: *Display, event: *xlib.XPropertyEvent) void {
@@ -1284,6 +1331,12 @@ fn handle_property_notify(display: *Display, event: *xlib.XPropertyEvent) void {
     } else if (event.atom == net_wm_window_type) {
         update_window_type(display, client);
     }
+}
+
+fn unfocus(display: *Display) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const client = monitor.sel orelse return;
+    _ = xlib.XSetWindowBorder(display.handle, client.window, border_color_unfocused);
 }
 
 fn focus(display: *Display, client: *Client) void {

@@ -57,7 +57,26 @@ pub fn destroy(mon: *Monitor) void {
     allocator.destroy(mon);
 }
 
+var root_window: xlib.Window = 0;
+var display_handle: ?*xlib.Display = null;
+
+pub fn set_root_window(root: xlib.Window, display: *xlib.Display) void {
+    root_window = root;
+    display_handle = display;
+}
+
 pub fn window_to_monitor(win: xlib.Window) ?*Monitor {
+    if (win == root_window and display_handle != null) {
+        var root_x: c_int = undefined;
+        var root_y: c_int = undefined;
+        var dummy_win: xlib.Window = undefined;
+        var dummy_int: c_int = undefined;
+        var dummy_uint: c_uint = undefined;
+        if (xlib.XQueryPointer(display_handle.?, root_window, &dummy_win, &dummy_win, &root_x, &root_y, &dummy_int, &dummy_int, &dummy_uint) != 0) {
+            return rect_to_monitor(root_x, root_y, 1, 1);
+        }
+    }
+
     var current = monitors;
     while (current) |monitor| {
         if (monitor.bar_win == win) {

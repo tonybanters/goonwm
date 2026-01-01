@@ -13,15 +13,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    exe.addIncludePath(b.path("vendor"));
-    exe.addObjectFile(b.path("vendor/libs7.a"));
+    exe.addIncludePath(b.path("src/config"));
+    exe.addCSourceFile(.{
+        .file = b.path("src/config/goonconf.c"),
+        .flags = &.{"-std=c99"},
+    });
 
     exe.linkSystemLibrary("X11");
     exe.linkSystemLibrary("Xinerama");
     exe.linkSystemLibrary("Xft");
     exe.linkSystemLibrary("fontconfig");
-    exe.linkSystemLibrary("m");
-    exe.linkSystemLibrary("dl");
     exe.linkLibC();
 
     b.installArtifact(exe);
