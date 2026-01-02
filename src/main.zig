@@ -350,22 +350,6 @@ fn grab_keybinds(display: *Display) void {
         }
     }
 
-    const click_modifiers = [_]c_uint{ 0, xlib.LockMask, xlib.Mod2Mask, xlib.LockMask | xlib.Mod2Mask };
-    for (click_modifiers) |mod| {
-        _ = xlib.XGrabButton(
-            display.handle,
-            xlib.Button1,
-            mod,
-            display.root,
-            xlib.True,
-            xlib.ButtonPressMask,
-            xlib.GrabModeSync,
-            xlib.GrabModeSync,
-            xlib.None,
-            xlib.None,
-        );
-    }
-
     std.debug.print("grabbed {d} keybinds from config\n", .{config.keybinds.items.len});
 }
 
@@ -417,6 +401,10 @@ fn run_event_loop(display: *Display) void {
 
 fn handle_event(display: *Display, event: *xlib.XEvent) void {
     const event_type = events.get_event_type(event);
+
+    if (event_type == .button_press) {
+        std.debug.print("EVENT: button_press received type={d}\n", .{event.type});
+    }
 
     switch (event_type) {
         .map_request => handle_map_request(display, &event.xmaprequest),
@@ -1208,14 +1196,8 @@ fn handle_expose(display: *Display, event: *xlib.XExposeEvent) void {
 }
 
 fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
-    _ = xlib.XAllowEvents(display.handle, xlib.ReplayPointer, xlib.CurrentTime);
-
-    var click_window = event.window;
-    if (event.subwindow != 0) {
-        click_window = event.subwindow;
-    }
-
-    if (bar_mod.window_to_bar(click_window)) |bar| {
+    std.debug.print("button_press: window=0x{x} subwindow=0x{x}\n", .{ event.window, event.subwindow });
+    if (bar_mod.window_to_bar(event.window)) |bar| {
         if (bar.monitor != monitor_mod.selected_monitor) {
             monitor_mod.selected_monitor = bar.monitor;
         }
@@ -1227,12 +1209,13 @@ fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
         return;
     }
 
-    const click_client = client_mod.window_to_client(click_window);
+    const click_client = client_mod.window_to_client(event.window);
     if (click_client) |found_client| {
         focus(display, found_client);
         if (found_client.monitor) |monitor| {
             restack(display, monitor);
         }
+        _ = xlib.XAllowEvents(display.handle, xlib.ReplayPointer, xlib.CurrentTime);
     }
 
     for (config.buttons.items) |button| {
@@ -1404,23 +1387,23 @@ fn unfocus_client(display: *Display, client: ?*Client, set_focus: bool) void {
 }
 
 fn grabbuttons(display: *Display, client: *Client, focused: bool) void {
+    std.debug.print("grabbuttons: window=0x{x} focused={}\n", .{ client.window, focused });
     _ = xlib.XUngrabButton(display.handle, xlib.AnyButton, xlib.AnyModifier, client.window);
     if (!focused) {
-        const modifiers = [_]c_uint{ 0, xlib.LockMask, xlib.Mod2Mask, xlib.LockMask | xlib.Mod2Mask };
-        for (modifiers) |mod| {
-            _ = xlib.XGrabButton(
-                display.handle,
-                xlib.AnyButton,
-                mod,
-                client.window,
-                xlib.False,
-                xlib.ButtonPressMask | xlib.ButtonReleaseMask,
-                xlib.GrabModeSync,
-                xlib.GrabModeSync,
-                xlib.None,
-                xlib.None,
-            );
-        }
+        const result = xlib.XGrabButton(
+            display.handle,
+            xlib.AnyButton,
+            xlib.AnyModifier,
+            client.window,
+            xlib.False,
+            xlib.ButtonPressMask | xlib.ButtonReleaseMask,
+            xlib.GrabModeSync,
+            xlib.GrabModeSync,
+            xlib.None,
+            xlib.None,
+        );
+        _ = xlib.XSync(display.handle, xlib.False);
+        std.debug.print("  XGrabButton result={d}\n", .{result});
     }
     for (config.buttons.items) |button| {
         if (button.click == .client_win) {
