@@ -1208,7 +1208,14 @@ fn handle_expose(display: *Display, event: *xlib.XExposeEvent) void {
 }
 
 fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
-    if (bar_mod.window_to_bar(event.window)) |bar| {
+    _ = xlib.XAllowEvents(display.handle, xlib.ReplayPointer, xlib.CurrentTime);
+
+    var click_window = event.window;
+    if (event.subwindow != 0) {
+        click_window = event.subwindow;
+    }
+
+    if (bar_mod.window_to_bar(click_window)) |bar| {
         if (bar.monitor != monitor_mod.selected_monitor) {
             monitor_mod.selected_monitor = bar.monitor;
         }
@@ -1220,17 +1227,13 @@ fn handle_button_press(display: *Display, event: *xlib.XButtonEvent) void {
         return;
     }
 
-    var click_client = client_mod.window_to_client(event.window);
-    if (click_client == null and event.subwindow != 0) {
-        click_client = client_mod.window_to_client(event.subwindow);
-    }
+    const click_client = client_mod.window_to_client(click_window);
     if (click_client) |found_client| {
         focus(display, found_client);
         if (found_client.monitor) |monitor| {
             restack(display, monitor);
         }
     }
-    _ = xlib.XAllowEvents(display.handle, xlib.ReplayPointer, xlib.CurrentTime);
 
     for (config.buttons.items) |button| {
         if (button.click != .client_win) continue;
@@ -1410,10 +1413,10 @@ fn grabbuttons(display: *Display, client: *Client, focused: bool) void {
                 xlib.AnyButton,
                 mod,
                 client.window,
-                xlib.True,
+                xlib.False,
                 xlib.ButtonPressMask | xlib.ButtonReleaseMask,
-                xlib.GrabModeAsync,
-                xlib.GrabModeAsync,
+                xlib.GrabModeSync,
+                xlib.GrabModeSync,
                 xlib.None,
                 xlib.None,
             );

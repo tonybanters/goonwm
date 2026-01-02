@@ -1,4 +1,5 @@
 notes/
+docs/
 zig-out/
 zig-cache/
 .zig-cache/
