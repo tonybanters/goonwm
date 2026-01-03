@@ -19,6 +19,7 @@ pub const XKeyEvent = c.XKeyEvent;
 pub const XDestroyWindowEvent = c.XDestroyWindowEvent;
 pub const XUnmapEvent = c.XUnmapEvent;
 pub const XCrossingEvent = c.XCrossingEvent;
+pub const XFocusChangeEvent = c.XFocusChangeEvent;
 pub const XErrorEvent = c.XErrorEvent;
 pub const KeySym = c.KeySym;
 
@@ -98,6 +99,8 @@ pub const XK_8 = c.XK_8;
 pub const XK_9 = c.XK_9;
 
 pub const Mod1Mask = c.Mod1Mask;
+pub const Mod3Mask = c.Mod3Mask;
+pub const Mod5Mask = c.Mod5Mask;
 
 pub const XKillClient = c.XKillClient;
 pub const XInternAtom = c.XInternAtom;
@@ -116,6 +119,10 @@ pub const XUngrabPointer = c.XUngrabPointer;
 pub const XGrabButton = c.XGrabButton;
 pub const XQueryPointer = c.XQueryPointer;
 pub const XWarpPointer = c.XWarpPointer;
+pub const XGetModifierMapping = c.XGetModifierMapping;
+pub const XFreeModifiermap = c.XFreeModifiermap;
+pub const XModifierKeymap = c.XModifierKeymap;
+pub const XK_Num_Lock = c.XK_Num_Lock;
 
 pub const Button1 = c.Button1;
 pub const Button1Mask = c.Button1Mask;
@@ -211,6 +218,9 @@ pub const XGetWMNormalHints = c.XGetWMNormalHints;
 pub const XGetTransientForHint = c.XGetTransientForHint;
 pub const XTextProperty = c.XTextProperty;
 pub const XGetTextProperty = c.XGetTextProperty;
+pub const XmbTextPropertyToTextList = c.XmbTextPropertyToTextList;
+pub const XFreeStringList = c.XFreeStringList;
+pub const Success = c.Success;
 pub const XGetWMProtocols = c.XGetWMProtocols;
 pub const XAllocSizeHints = c.XAllocSizeHints;
 

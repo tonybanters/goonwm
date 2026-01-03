@@ -35,7 +35,7 @@ pub const Monitor = struct {
     stack: ?*Client = null,
     next: ?*Monitor = null,
     bar_win: xlib.Window = 0,
-    lt: [2]?*const Layout = .{ null, null },
+    lt: [3]?*const Layout = .{ null, null, null },
 };
 
 pub var monitors: ?*Monitor = null;

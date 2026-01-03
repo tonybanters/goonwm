@@ -94,6 +94,9 @@ fn register_functions() void {
     c.goonconf_register(context, "send-to-monitor", gc_send_to_monitor);
     c.goonconf_register(context, "reload-config", gc_reload_config);
     c.goonconf_register(context, "auto-tile!", gc_auto_tile);
+    c.goonconf_register(context, "layout-tile-symbol!", gc_layout_tile_symbol);
+    c.goonconf_register(context, "layout-monocle-symbol!", gc_layout_monocle_symbol);
+    c.goonconf_register(context, "layout-floating-symbol!", gc_layout_floating_symbol);
 }
 
 fn get_string(val: ?*c.goonconf_value_t) ?[]const u8 {
@@ -657,5 +660,26 @@ fn gc_reload_config(context: ?*c.goonconf_ctx_t, _: ?*c.goonconf_value_t) callco
 fn gc_auto_tile(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
     const cfg = config orelse return c.goonconf_nil(context);
     cfg.auto_tile = get_bool(c.goonconf_car(args), false);
+    return c.goonconf_nil(context);
+}
+
+fn gc_layout_tile_symbol(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
+    const cfg = config orelse return c.goonconf_nil(context);
+    const symbol = get_string(c.goonconf_car(args)) orelse return c.goonconf_nil(context);
+    cfg.layout_tile_symbol = symbol;
+    return c.goonconf_nil(context);
+}
+
+fn gc_layout_monocle_symbol(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
+    const cfg = config orelse return c.goonconf_nil(context);
+    const symbol = get_string(c.goonconf_car(args)) orelse return c.goonconf_nil(context);
+    cfg.layout_monocle_symbol = symbol;
+    return c.goonconf_nil(context);
+}
+
+fn gc_layout_floating_symbol(context: ?*c.goonconf_ctx_t, args: ?*c.goonconf_value_t) callconv(.c) ?*c.goonconf_value_t {
+    const cfg = config orelse return c.goonconf_nil(context);
+    const symbol = get_string(c.goonconf_car(args)) orelse return c.goonconf_nil(context);
+    cfg.layout_floating_symbol = symbol;
     return c.goonconf_nil(context);
 }

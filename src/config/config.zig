@@ -104,6 +104,10 @@ pub const Config = struct {
 
     auto_tile: bool = false,
 
+    layout_tile_symbol: []const u8 = "[]=",
+    layout_monocle_symbol: []const u8 = "[M]",
+    layout_floating_symbol: []const u8 = "><>",
+
     keybinds: std.ArrayListUnmanaged(Keybind) = .{},
     rules: std.ArrayListUnmanaged(Rule) = .{},
     blocks: std.ArrayListUnmanaged(Block) = .{},

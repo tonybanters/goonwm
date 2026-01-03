@@ -3,9 +3,28 @@ const xlib = @import("../x11/xlib.zig");
 const monitor_mod = @import("../monitor.zig");
 const client_mod = @import("../client.zig");
 const blocks_mod = @import("blocks/blocks.zig");
+const config_mod = @import("../config/config.zig");
 
 const Monitor = monitor_mod.Monitor;
 const Block = blocks_mod.Block;
+
+fn get_layout_symbol(layout_index: u32) []const u8 {
+    const cfg = config_mod.get_config();
+    if (cfg) |conf| {
+        return switch (layout_index) {
+            0 => conf.layout_tile_symbol,
+            1 => conf.layout_monocle_symbol,
+            2 => conf.layout_floating_symbol,
+            else => "[?]",
+        };
+    }
+    return switch (layout_index) {
+        0 => "[]=",
+        1 => "[M]",
+        2 => "><>",
+        else => "[?]",
+    };
+}
 
 pub const ColorScheme = struct {
     foreground: c_ulong,
@@ -174,11 +193,9 @@ pub const Bar = struct {
 
         x_position += padding;
 
-        if (monitor.lt[monitor.sel_lt]) |layout| {
-            const symbol = layout.symbol;
-            self.draw_text(display, x_position, @divTrunc(self.height + self.font_height, 2) - 4, symbol, self.scheme_normal.foreground);
-            x_position += self.text_width(display, symbol) + padding;
-        }
+        const layout_symbol = get_layout_symbol(monitor.sel_lt);
+        self.draw_text(display, x_position, @divTrunc(self.height + self.font_height, 2) - 4, layout_symbol, self.scheme_normal.foreground);
+        x_position += self.text_width(display, layout_symbol) + padding;
 
         var block_x: i32 = self.width - padding;
         var block_index: usize = self.blocks.items.len;
