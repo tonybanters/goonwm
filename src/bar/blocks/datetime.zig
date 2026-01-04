@@ -27,6 +27,7 @@ pub const DateTime = struct {
 
         const hours: u32 = @intCast(tm.tm_hour);
         const minutes: u32 = @intCast(tm.tm_min);
+        const seconds: u32 = @intCast(tm.tm_sec);
         const day: u8 = @intCast(tm.tm_mday);
         const month: u8 = @intCast(tm.tm_mon + 1);
         const year: i32 = tm.tm_year + 1900;
@@ -41,10 +42,10 @@ pub const DateTime = struct {
                 const next = self.datetime_format[fmt_idx + 1];
                 if (next == '-' and fmt_idx + 2 < self.datetime_format.len) {
                     const spec = self.datetime_format[fmt_idx + 2];
-                    dt_len += formatSpec(spec, false, hours, minutes, day, month, year, dow, datetime_buf[dt_len..]);
+                    dt_len += formatSpec(spec, false, hours, minutes, seconds, day, month, year, dow, datetime_buf[dt_len..]);
                     fmt_idx += 3;
                 } else {
-                    dt_len += formatSpec(next, true, hours, minutes, day, month, year, dow, datetime_buf[dt_len..]);
+                    dt_len += formatSpec(next, true, hours, minutes, seconds, day, month, year, dow, datetime_buf[dt_len..]);
                     fmt_idx += 2;
                 }
             } else {
@@ -57,7 +58,7 @@ pub const DateTime = struct {
         return format_util.substitute(self.format, datetime_buf[0..dt_len], buffer);
     }
 
-    fn formatSpec(spec: u8, pad: bool, hours: u32, minutes: u32, day: u8, month: u8, year: i32, dow: i32, buf: []u8) usize {
+    fn formatSpec(spec: u8, pad: bool, hours: u32, minutes: u32, seconds: u32, day: u8, month: u8, year: i32, dow: i32, buf: []u8) usize {
         const day_names = [_][]const u8{ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
         const month_names = [_][]const u8{ "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
@@ -67,6 +68,7 @@ pub const DateTime = struct {
             'd' => if (pad) (std.fmt.bufPrint(buf, "{d:0>2}", .{day}) catch return 0).len else (std.fmt.bufPrint(buf, "{d}", .{day}) catch return 0).len,
             'H' => if (pad) (std.fmt.bufPrint(buf, "{d:0>2}", .{hours}) catch return 0).len else (std.fmt.bufPrint(buf, "{d}", .{hours}) catch return 0).len,
             'M' => if (pad) (std.fmt.bufPrint(buf, "{d:0>2}", .{minutes}) catch return 0).len else (std.fmt.bufPrint(buf, "{d}", .{minutes}) catch return 0).len,
+            'S' => if (pad) (std.fmt.bufPrint(buf, "{d:0>2}", .{seconds}) catch return 0).len else (std.fmt.bufPrint(buf, "{d}", .{seconds}) catch return 0).len,
             'I' => blk: {
                 const h12 = if (hours == 0) 12 else if (hours > 12) hours - 12 else hours;
                 break :blk if (pad) (std.fmt.bufPrint(buf, "{d:0>2}", .{h12}) catch return 0).len else (std.fmt.bufPrint(buf, "{d}", .{h12}) catch return 0).len;

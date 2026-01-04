@@ -38,6 +38,11 @@ var wm_check_window: xlib.Window = 0;
 
 var border_color_focused: c_ulong = 0x6dade3;
 var border_color_unfocused: c_ulong = 0x444444;
+var border_width: i32 = 2;
+var gap_outer_v: i32 = 5;
+var gap_outer_h: i32 = 5;
+var gap_inner_h: i32 = 5;
+var gap_inner_v: i32 = 5;
 
 var tags: [9][]const u8 = .{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
 
@@ -296,6 +301,11 @@ fn setup_monitors(display: *Display) void {
 fn apply_config_values() void {
     border_color_focused = config.border_focused;
     border_color_unfocused = config.border_unfocused;
+    border_width = config.border_width;
+    gap_inner_h = config.gap_inner_h;
+    gap_inner_v = config.gap_inner_v;
+    gap_outer_h = config.gap_outer_h;
+    gap_outer_v = config.gap_outer_v;
     tags = config.tags;
 }
 
@@ -542,7 +552,7 @@ fn manage(display: *Display, win: xlib.Window, window_attrs: *xlib.XWindowAttrib
     client.old_width = window_attrs.width;
     client.old_height = window_attrs.height;
     client.old_border_width = window_attrs.border_width;
-    client.border_width = 1;
+    client.border_width = border_width;
 
     update_title(display, client);
 
@@ -915,10 +925,10 @@ fn toggle_client_tag(display: *Display, tag_mask: u32) void {
 fn toggle_gaps() void {
     const monitor = monitor_mod.selected_monitor orelse return;
     if (monitor.gap_inner_h == 0) {
-        monitor.gap_inner_h = 5;
-        monitor.gap_inner_v = 5;
-        monitor.gap_outer_h = 5;
-        monitor.gap_outer_v = 5;
+        monitor.gap_inner_h = gap_inner_v;
+        monitor.gap_inner_v = gap_inner_v;
+        monitor.gap_outer_h = gap_outer_h;
+        monitor.gap_outer_v = gap_outer_v;
     } else {
         monitor.gap_inner_h = 0;
         monitor.gap_inner_v = 0;
