@@ -262,6 +262,11 @@ fn setup_monitors(display: *Display) void {
                 mon.lt[0] = &tiling.layout;
                 mon.lt[1] = &monocle.layout;
                 mon.lt[2] = &floating.layout;
+                for (0..10) |i| {
+                    mon.pertag.ltidxs[i][0] = mon.lt[0];
+                    mon.pertag.ltidxs[i][1] = mon.lt[1];
+                    mon.pertag.ltidxs[i][2] = mon.lt[2];
+                }
 
                 if (prev_monitor) |prev| {
                     prev.next = mon;
@@ -293,6 +298,11 @@ fn setup_monitors(display: *Display) void {
     mon.lt[0] = &tiling.layout;
     mon.lt[1] = &monocle.layout;
     mon.lt[2] = &floating.layout;
+    for (0..10) |i| {
+        mon.pertag.ltidxs[i][0] = mon.lt[0];
+        mon.pertag.ltidxs[i][1] = mon.lt[1];
+        mon.pertag.ltidxs[i][2] = mon.lt[2];
+    }
     monitor_mod.monitors = mon;
     monitor_mod.selected_monitor = mon;
     std.debug.print("monitor created: {d}x{d}\n", .{ mon.mon_w, mon.mon_h });
@@ -904,6 +914,25 @@ fn toggle_view(display: *Display, tag_mask: u32) void {
     const new_tags = monitor.tagset[monitor.sel_tags] ^ tag_mask;
     if (new_tags != 0) {
         monitor.tagset[monitor.sel_tags] = new_tags;
+
+        if (new_tags == ~@as(u32, 0)) {
+            monitor.pertag.prevtag = monitor.pertag.curtag;
+            monitor.pertag.curtag = 0;
+        }
+
+        if ((new_tags & (@as(u32, 1) << @intCast(monitor.pertag.curtag -| 1))) == 0) {
+            monitor.pertag.prevtag = monitor.pertag.curtag;
+            var i: u32 = 0;
+            while (i < 9) : (i += 1) {
+                if ((new_tags & (@as(u32, 1) << @intCast(i))) != 0) break;
+            }
+            monitor.pertag.curtag = i + 1;
+        }
+
+        monitor.nmaster = monitor.pertag.nmasters[monitor.pertag.curtag];
+        monitor.mfact = monitor.pertag.mfacts[monitor.pertag.curtag];
+        monitor.sel_lt = monitor.pertag.sellts[monitor.pertag.curtag];
+
         focus_top_client(display, monitor);
         arrange(monitor);
         bar_mod.invalidate_bars();
@@ -1019,7 +1048,27 @@ fn view(display: *Display, tag_mask: u32) void {
     monitor.sel_tags ^= 1;
     if (tag_mask != 0) {
         monitor.tagset[monitor.sel_tags] = tag_mask;
+        monitor.pertag.prevtag = monitor.pertag.curtag;
+
+        if (tag_mask == ~@as(u32, 0)) {
+            monitor.pertag.curtag = 0;
+        } else {
+            var i: u32 = 0;
+            while (i < 9) : (i += 1) {
+                if ((tag_mask & (@as(u32, 1) << @intCast(i))) != 0) break;
+            }
+            monitor.pertag.curtag = i + 1;
+        }
+    } else {
+        const tmp = monitor.pertag.prevtag;
+        monitor.pertag.prevtag = monitor.pertag.curtag;
+        monitor.pertag.curtag = tmp;
     }
+
+    monitor.nmaster = monitor.pertag.nmasters[monitor.pertag.curtag];
+    monitor.mfact = monitor.pertag.mfacts[monitor.pertag.curtag];
+    monitor.sel_lt = monitor.pertag.sellts[monitor.pertag.curtag];
+
     focus_top_client(display, monitor);
     arrange(monitor);
     bar_mod.invalidate_bars();
@@ -1127,7 +1176,9 @@ fn toggle_floating(_: *Display) void {
 
 fn incnmaster(delta: i32) void {
     const monitor = monitor_mod.selected_monitor orelse return;
-    monitor.nmaster = @max(0, monitor.nmaster + delta);
+    const new_val = @max(0, monitor.nmaster + delta);
+    monitor.nmaster = new_val;
+    monitor.pertag.nmasters[monitor.pertag.curtag] = new_val;
     arrange(monitor);
     std.debug.print("incnmaster: nmaster={d}\n", .{monitor.nmaster});
 }
@@ -1139,13 +1190,16 @@ fn setmfact(delta: f32) void {
         return;
     }
     monitor.mfact = new_mfact;
+    monitor.pertag.mfacts[monitor.pertag.curtag] = new_mfact;
     arrange(monitor);
     std.debug.print("setmfact: mfact={d:.2}\n", .{monitor.mfact});
 }
 
 fn cycle_layout() void {
     const monitor = monitor_mod.selected_monitor orelse return;
-    monitor.sel_lt = (monitor.sel_lt + 1) % 3;
+    const new_lt = (monitor.sel_lt + 1) % 3;
+    monitor.sel_lt = new_lt;
+    monitor.pertag.sellts[monitor.pertag.curtag] = new_lt;
     arrange(monitor);
     bar_mod.invalidate_bars();
     if (monitor.lt[monitor.sel_lt]) |layout| {

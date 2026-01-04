@@ -41,6 +41,8 @@
 (bind '(mod1 shift) "q" (quit))
 (bind '(mod1 shift) "r" (reload-config))
 
+(bind '(mod1) "n" (cycle-layout))
+
 (bind '(mod1) "j" (focus-next))
 (bind '(mod1) "k" (focus-prev))
 (bind '(mod1 shift) "j" (move-next))
