@@ -86,6 +86,12 @@ pub const Block = struct {
     battery_name: ?[]const u8 = null,
 };
 
+pub const ColorScheme = struct {
+    fg: u32 = 0xbbbbbb,
+    bg: u32 = 0x1a1b26,
+    border: u32 = 0x444444,
+};
+
 pub const Config = struct {
     allocator: std.mem.Allocator,
 
@@ -107,6 +113,11 @@ pub const Config = struct {
     layout_tile_symbol: []const u8 = "[]=",
     layout_monocle_symbol: []const u8 = "[M]",
     layout_floating_symbol: []const u8 = "><>",
+
+    scheme_normal: ColorScheme = .{ .fg = 0xbbbbbb, .bg = 0x1a1b26, .border = 0x444444 },
+    scheme_selected: ColorScheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0xad8ee6 },
+    scheme_occupied: ColorScheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0x0db9d7 },
+    scheme_urgent: ColorScheme = .{ .fg = 0xf7768e, .bg = 0x1a1b26, .border = 0xf7768e },
 
     keybinds: std.ArrayListUnmanaged(Keybind) = .{},
     rules: std.ArrayListUnmanaged(Rule) = .{},

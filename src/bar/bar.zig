@@ -112,6 +112,12 @@ pub const Bar = struct {
 
         _ = xlib.XMapWindow(display, window);
 
+        const cfg = config_mod.get_config();
+        const scheme_normal = if (cfg) |c| ColorScheme{ .foreground = c.scheme_normal.fg, .background = c.scheme_normal.bg, .border = c.scheme_normal.border } else ColorScheme{ .foreground = 0xbbbbbb, .background = 0x1a1b26, .border = 0x444444 };
+        const scheme_selected = if (cfg) |c| ColorScheme{ .foreground = c.scheme_selected.fg, .background = c.scheme_selected.bg, .border = c.scheme_selected.border } else ColorScheme{ .foreground = 0x0db9d7, .background = 0x1a1b26, .border = 0xad8ee6 };
+        const scheme_occupied = if (cfg) |c| ColorScheme{ .foreground = c.scheme_occupied.fg, .background = c.scheme_occupied.bg, .border = c.scheme_occupied.border } else ColorScheme{ .foreground = 0x0db9d7, .background = 0x1a1b26, .border = 0x0db9d7 };
+        const scheme_urgent = if (cfg) |c| ColorScheme{ .foreground = c.scheme_urgent.fg, .background = c.scheme_urgent.bg, .border = c.scheme_urgent.border } else ColorScheme{ .foreground = 0xf7768e, .background = 0x1a1b26, .border = 0xf7768e };
+
         bar.* = Bar{
             .window = window,
             .pixmap = pixmap,
@@ -122,10 +128,10 @@ pub const Bar = struct {
             .monitor = monitor,
             .font = font,
             .font_height = font_height,
-            .scheme_normal = ColorScheme{ .foreground = 0xbbbbbb, .background = 0x1a1b26, .border = 0x444444 },
-            .scheme_selected = ColorScheme{ .foreground = 0x0db9d7, .background = 0x1a1b26, .border = 0xad8ee6 },
-            .scheme_occupied = ColorScheme{ .foreground = 0x0db9d7, .background = 0x1a1b26, .border = 0x0db9d7 },
-            .scheme_urgent = ColorScheme{ .foreground = 0xf7768e, .background = 0x1a1b26, .border = 0xf7768e },
+            .scheme_normal = scheme_normal,
+            .scheme_selected = scheme_selected,
+            .scheme_occupied = scheme_occupied,
+            .scheme_urgent = scheme_urgent,
             .allocator = allocator,
             .blocks = .{},
             .needs_redraw = true,

@@ -10,7 +10,7 @@ const floating = @import("layouts/floating.zig");
 const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
-const goonconf = @import("config/goonconf.zig");
+const goon = @import("config/goon.zig");
 
 const Display = display_mod.Display;
 const Client = client_mod.Client;
@@ -75,7 +75,7 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "-c") or std.mem.eql(u8, arg, "--config")) {
             config_path = args.next();
         } else if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
-            std.debug.print("usage: goonwm [-c config.scm]\n", .{});
+            std.debug.print("usage: goonwm [-c config.goon]\n", .{});
             return;
         }
     }
@@ -84,18 +84,18 @@ pub fn main() !void {
     defer config.deinit();
     config_mod.set_config(&config);
 
-    if (goonconf.init(&config)) {
+    if (goon.init(&config)) {
         const loaded = if (config_path) |path|
-            goonconf.load_file(path)
+            goon.load_file(path)
         else
-            goonconf.load_config();
+            goon.load_config();
 
         if (loaded) {
             config_path_global = config_path;
             if (config_path) |path| {
                 std.debug.print("loaded config from {s}\n", .{path});
             } else {
-                std.debug.print("loaded config from ~/.config/goonwm/config.scm\n", .{});
+                std.debug.print("loaded config from ~/.config/goonwm/config.goon\n", .{});
             }
             apply_config_values();
         } else {
@@ -103,7 +103,7 @@ pub fn main() !void {
             setup_default_keybinds();
         }
     } else {
-        std.debug.print("failed to init goonconf, using defaults\n", .{});
+        std.debug.print("failed to init goon, using defaults\n", .{});
         setup_default_keybinds();
     }
 
@@ -141,7 +141,7 @@ pub fn main() !void {
     std.debug.print("entering event loop\n", .{});
     run_event_loop(&display);
 
-    goonconf.deinit();
+    goon.deinit();
     std.debug.print("goonwm exiting\n", .{});
 }
 
@@ -755,15 +755,15 @@ fn reload_config(display: *Display) void {
     config.blocks.clearRetainingCapacity();
 
     const loaded = if (config_path_global) |path|
-        goonconf.load_file(path)
+        goon.load_file(path)
     else
-        goonconf.load_config();
+        goon.load_config();
 
     if (loaded) {
         if (config_path_global) |path| {
             std.debug.print("reloaded config from {s}\n", .{path});
         } else {
-            std.debug.print("reloaded config from ~/.config/goonwm/config.scm\n", .{});
+            std.debug.print("reloaded config from ~/.config/goonwm/config.goon\n", .{});
         }
         apply_config_values();
     } else {
