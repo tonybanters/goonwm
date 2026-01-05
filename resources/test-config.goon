@@ -1,0 +1,80 @@
+let terminal = "st";
+let font = "Iosevka Nerd Font Propo:style=Bold:size=14";
+
+let bg = "#1e1e1e";
+let fg = "#d4d4d4";
+let red = "#f14c4c";
+let cyan = "#4ec9b0";
+let green = "#6a9955";
+let light_blue = "#9cdcfe";
+let blue = "#569cd6";
+let purple = "#c586c0";
+let yellow = "#dcdcaa";
+let orange = "#ce9178";
+let grey = "#808080";
+let separator = "#3c3c3c";
+
+{
+    terminal = terminal;
+    font = font;
+    tags = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+    border = {
+        width = 2;
+        focused = blue;
+        unfocused = grey;
+    };
+
+    gaps = {
+        inner = [5, 5];
+        outer = [5, 5];
+    };
+
+    auto_tile = true;
+
+    schemes = {
+        normal = { fg = fg; bg = bg; border = grey; };
+        selected = { fg = blue; bg = bg; border = blue; };
+        occupied = { fg = cyan; bg = bg; border = cyan; };
+        urgent = { fg = red; bg = bg; border = red; };
+    };
+
+    bar = [
+        { type = "ram"; fmt = " Ram: {}/{} GB"; interval = 5; color = light_blue; },
+        { type = "static"; text = "│"; color = separator; underline = false; },
+        { type = "datetime"; fmt = "󰸗 {}"; strftime = "%a, %b %d - %-I:%M %P"; interval = 1; color = cyan; },
+    ];
+
+    keys = [
+        { mod = ["mod1"]; key = "Return"; action = "spawn-terminal"; },
+        { mod = ["mod1"]; key = "d"; action = "spawn"; arg = "rofi -show drun"; },
+        { mod = ["mod1"]; key = "q"; action = "kill-client"; },
+        { mod = ["mod1", "shift"]; key = "q"; action = "quit"; },
+        { mod = ["mod1", "shift"]; key = "r"; action = "reload-config"; },
+
+        { mod = ["mod1"]; key = "n"; action = "cycle-layout"; },
+        { mod = ["mod1"]; key = "j"; action = "focus-next"; },
+        { mod = ["mod1"]; key = "k"; action = "focus-prev"; },
+
+        { mod = ["mod1"]; key = "h"; action = "resize-master"; arg = -50; },
+        { mod = ["mod1"]; key = "l"; action = "resize-master"; arg = 50; },
+        { mod = ["mod1"]; key = "a"; action = "toggle-gaps"; },
+
+        { mod = ["mod1"]; key = "f"; action = "toggle-fullscreen"; },
+        { mod = ["mod1"]; key = "Space"; action = "toggle-floating"; },
+
+        ...tag_binds(["mod1"], "view-tag", 1, 9),
+        ...tag_binds(["mod1", "shift"], "move-to-tag", 1, 9),
+    ];
+
+    rules = [
+        { class = "Gimp"; floating = true; },
+        { class = "Firefox"; tag = 8; },
+    ];
+
+    buttons = [
+        { context = "client-win"; mod = ["mod1"]; button = "button1"; action = "move-mouse"; },
+        { context = "client-win"; mod = ["mod1"]; button = "button2"; action = "toggle-floating"; },
+        { context = "client-win"; mod = ["mod1"]; button = "button3"; action = "resize-mouse"; },
+    ];
+}
