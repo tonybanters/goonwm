@@ -1,0 +1,10 @@
+{
+    red = "#f7768e";
+    cyan = "#0db9d7";
+    green = "#9ece6a";
+    light_blue = "#7aa2f7";
+    blue = "#6dade3";
+    purple = "#ad8ee6";
+    grey = "#bbbbbb";
+    separator = "#444b6a";
+}
