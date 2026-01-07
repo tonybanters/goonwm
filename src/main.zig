@@ -754,6 +754,9 @@ fn reload_config(display: *Display) void {
     config.rules.clearRetainingCapacity();
     config.blocks.clearRetainingCapacity();
 
+    goon.deinit();
+    _ = goon.init(&config);
+
     const loaded = if (config_path_global) |path|
         goon.load_file(path)
     else
@@ -771,9 +774,11 @@ fn reload_config(display: *Display) void {
         setup_default_keybinds();
     }
 
+    bar_mod.destroy_bars(gpa.allocator(), display.handle);
+    setup_bars(gpa.allocator(), display);
     rebuild_bar_blocks();
+
     grab_keybinds(display);
-    bar_mod.invalidate_bars();
 }
 
 fn rebuild_bar_blocks() void {

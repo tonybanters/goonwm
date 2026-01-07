@@ -335,6 +335,16 @@ pub fn invalidate_bars() void {
     }
 }
 
+pub fn destroy_bars(allocator: std.mem.Allocator, display: *xlib.Display) void {
+    var current = bars;
+    while (current) |bar| {
+        const next = bar.next;
+        bar.destroy(allocator, display);
+        current = next;
+    }
+    bars = null;
+}
+
 pub fn window_to_bar(win: xlib.Window) ?*Bar {
     var current = bars;
     while (current) |bar| {
