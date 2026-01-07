@@ -2,20 +2,20 @@
 #include <stdio.h>
 #include <string.h>
 
-static goon_value_t *builtin_tag_binds(goon_ctx_t *ctx, goon_value_t **args, size_t argc) {
+static Goon_Value *builtin_tag_binds(Goon_Ctx *ctx, Goon_Value **args, size_t argc) {
     if (argc < 4) return goon_list(ctx);
 
-    goon_value_t *mods = args[0];
+    Goon_Value *mods = args[0];
     const char *action = goon_to_string(args[1]);
     int64_t start = goon_to_int(args[2]);
     int64_t end = goon_to_int(args[3]);
 
     if (!action) return goon_list(ctx);
 
-    goon_value_t *result = goon_list(ctx);
+    Goon_Value *result = goon_list(ctx);
 
     for (int64_t i = start; i <= end; i++) {
-        goon_value_t *binding = goon_record(ctx);
+        Goon_Value *binding = goon_record(ctx);
 
         goon_record_set(ctx, binding, "mod", mods);
 
@@ -33,7 +33,7 @@ static goon_value_t *builtin_tag_binds(goon_ctx_t *ctx, goon_value_t **args, siz
     return result;
 }
 
-static void print_value(goon_value_t *val, int indent) {
+static void print_value(Goon_Value *val, int indent) {
     if (!val) {
         printf("null");
         return;
@@ -65,7 +65,7 @@ static void print_value(goon_value_t *val, int indent) {
             break;
         case GOON_RECORD: {
             printf("{\n");
-            goon_record_field_t *f = val->data.record.fields;
+            Goon_Record_Field *f = val->data.record.fields;
             while (f) {
                 for (int j = 0; j < indent + 2; j++) printf(" ");
                 printf("%s = ", f->key);
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
         "    ];\n"
         "}\n";
 
-    goon_ctx_t *ctx = goon_create();
+    Goon_Ctx *ctx = goon_create();
     if (!ctx) {
         fprintf(stderr, "failed to create context\n");
         return 1;
@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    goon_value_t *result = goon_eval_result(ctx);
+    Goon_Value *result = goon_eval_result(ctx);
     if (result) {
         printf("result:\n");
         print_value(result, 0);
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
     if (argc > 1) {
         printf("\n--- loading file: %s ---\n", argv[1]);
 
-        goon_ctx_t *file_ctx = goon_create();
+        Goon_Ctx *file_ctx = goon_create();
         goon_register(file_ctx, "tag_binds", builtin_tag_binds);
 
         if (!goon_load_file(file_ctx, argv[1])) {
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        goon_value_t *file_result = goon_eval_result(file_ctx);
+        Goon_Value *file_result = goon_eval_result(file_ctx);
         if (file_result) {
             printf("file result:\n");
             print_value(file_result, 0);

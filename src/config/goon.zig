@@ -15,7 +15,7 @@ const c = @cImport({
     @cInclude("goon.h");
 });
 
-var ctx: ?*c.goon_ctx_t = null;
+var ctx: ?*c.Goon_Ctx = null;
 var config: ?*Config = null;
 
 pub fn init(cfg: *Config) bool {
@@ -64,7 +64,7 @@ fn register_builtins() void {
     c.goon_register(context, "tag_binds", builtin_tag_binds);
 }
 
-fn builtin_tag_binds(context: ?*c.goon_ctx_t, args: [*c]?*c.goon_value_t, argc: usize) callconv(.c) ?*c.goon_value_t {
+fn builtin_tag_binds(context: ?*c.Goon_Ctx, args: [*c]?*c.Goon_Value, argc: usize) callconv(.c) ?*c.Goon_Value {
     if (argc < 4) return c.goon_list(context);
 
     const mods = args[0];
@@ -96,24 +96,24 @@ fn builtin_tag_binds(context: ?*c.goon_ctx_t, args: [*c]?*c.goon_value_t, argc: 
     return result;
 }
 
-fn get_string(val: ?*c.goon_value_t) ?[]const u8 {
+fn get_string(val: ?*c.Goon_Value) ?[]const u8 {
     if (!c.goon_is_string(val)) return null;
     const cstr = c.goon_to_string(val);
     if (cstr == null) return null;
     return std.mem.sliceTo(cstr, 0);
 }
 
-fn get_int(val: ?*c.goon_value_t) ?i64 {
+fn get_int(val: ?*c.Goon_Value) ?i64 {
     if (!c.goon_is_int(val)) return null;
     return c.goon_to_int(val);
 }
 
-fn get_bool(val: ?*c.goon_value_t) ?bool {
+fn get_bool(val: ?*c.Goon_Value) ?bool {
     if (!c.goon_is_bool(val)) return null;
     return c.goon_to_bool(val);
 }
 
-fn parse_color(val: ?*c.goon_value_t) ?u32 {
+fn parse_color(val: ?*c.Goon_Value) ?u32 {
     if (c.goon_is_int(val)) {
         return @intCast(c.goon_to_int(val));
     }
@@ -127,7 +127,7 @@ fn parse_color(val: ?*c.goon_value_t) ?u32 {
     return null;
 }
 
-fn parse_modifiers(mods_list: ?*c.goon_value_t) u32 {
+fn parse_modifiers(mods_list: ?*c.Goon_Value) u32 {
     var mod_mask: u32 = 0;
     if (!c.goon_is_list(mods_list)) return mod_mask;
 
@@ -226,7 +226,7 @@ fn parse_action(name: []const u8) ?Action {
     return null;
 }
 
-fn apply_config(root: ?*c.goon_value_t) void {
+fn apply_config(root: ?*c.Goon_Value) void {
     const cfg = config orelse return;
     if (root == null or !c.goon_is_record(root)) return;
 
@@ -295,7 +295,7 @@ fn apply_config(root: ?*c.goon_value_t) void {
     apply_buttons_config(root, cfg);
 }
 
-fn parse_scheme(rec: ?*c.goon_value_t) ?ColorScheme {
+fn parse_scheme(rec: ?*c.Goon_Value) ?ColorScheme {
     if (!c.goon_is_record(rec)) return null;
     const fg = parse_color(c.goon_record_get(rec, "fg")) orelse return null;
     const bg = parse_color(c.goon_record_get(rec, "bg")) orelse return null;
@@ -303,7 +303,7 @@ fn parse_scheme(rec: ?*c.goon_value_t) ?ColorScheme {
     return ColorScheme{ .fg = fg, .bg = bg, .border = border };
 }
 
-fn apply_schemes_config(root: ?*c.goon_value_t, cfg: *Config) void {
+fn apply_schemes_config(root: ?*c.Goon_Value, cfg: *Config) void {
     const schemes_rec = c.goon_record_get(root, "schemes");
     if (!c.goon_is_record(schemes_rec)) return;
 
@@ -321,7 +321,7 @@ fn apply_schemes_config(root: ?*c.goon_value_t, cfg: *Config) void {
     }
 }
 
-fn apply_bar_config(root: ?*c.goon_value_t, cfg: *Config) void {
+fn apply_bar_config(root: ?*c.Goon_Value, cfg: *Config) void {
     const bar_list = c.goon_record_get(root, "bar");
     if (!c.goon_is_list(bar_list)) return;
 
@@ -373,7 +373,7 @@ fn apply_bar_config(root: ?*c.goon_value_t, cfg: *Config) void {
     }
 }
 
-fn apply_keys_config(root: ?*c.goon_value_t, cfg: *Config) void {
+fn apply_keys_config(root: ?*c.Goon_Value, cfg: *Config) void {
     const keys_list = c.goon_record_get(root, "keys");
     if (!c.goon_is_list(keys_list)) return;
 
@@ -410,7 +410,7 @@ fn apply_keys_config(root: ?*c.goon_value_t, cfg: *Config) void {
     }
 }
 
-fn apply_rules_config(root: ?*c.goon_value_t, cfg: *Config) void {
+fn apply_rules_config(root: ?*c.Goon_Value, cfg: *Config) void {
     const rules_list = c.goon_record_get(root, "rules");
     if (!c.goon_is_list(rules_list)) return;
 
@@ -449,7 +449,7 @@ fn apply_rules_config(root: ?*c.goon_value_t, cfg: *Config) void {
     }
 }
 
-fn apply_buttons_config(root: ?*c.goon_value_t, cfg: *Config) void {
+fn apply_buttons_config(root: ?*c.Goon_Value, cfg: *Config) void {
     const buttons_list = c.goon_record_get(root, "buttons");
     if (!c.goon_is_list(buttons_list)) return;
 

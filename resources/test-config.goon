@@ -34,7 +34,7 @@ let separator = "#3c3c3c";
 
     schemes = {
         normal = { fg = fg; bg = bg; border = grey; };
-        selected = { fg = blue; bg = bg; border = blue; };
+        selected = { fg = blue; bg = bg; border = purple; };
         occupied = { fg = cyan; bg = bg; border = cyan; };
         urgent = { fg = red; bg = bg; border = red; };
     };
