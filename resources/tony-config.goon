@@ -1,0 +1,77 @@
+let terminal = "alacritty";
+let font = "Iosevka Nerd Font Propo:style=Bold:size=12";
+
+let colors = import("./colors.goon");
+
+{
+    terminal = terminal;
+    font = font;
+    tags = ["", "󰊯", "", "", "󰙯", "󱇤", "", "󱘶", "󰧮"];
+
+    border = {
+        width = 2;
+        focused = colors.blue;
+        unfocused = colors.grey;
+    };
+
+    gaps = {
+        inner = [10, 10];
+        outer = [10, 10];
+    };
+
+    bar = [
+        { type = "shell"; fmt = " {}"; cmd = "echo 20 C"; interval = 5; color = colors.green; },
+        { type = "static"; text = "│"; color = colors.separator; underline = false; },
+        { type = "ram"; fmt = " Ram: {}/{} GB"; interval = 5; color = colors.light_blue; },
+        { type = "static"; text = "│"; color = colors.separator; underline = false; },
+        { type = "shell"; fmt = " {}"; cmd = "uname -r"; interval = 99999; color = colors.red; },
+        { type = "static"; text = "│"; color = colors.separator; underline = false; },
+        { type = "datetime"; fmt = "󰸗 {}"; strftime = "%H:%M:%S %p"; interval = 1; color = colors.cyan; },
+    ];
+
+    keys = [
+        { mod = ["super"]; key = "Return"; action = "spawn-terminal"; },
+        { mod = ["super"]; key = "d"; action = "spawn"; arg = "rofi -show drun"; },
+        { mod = ["super"]; key = "s"; action = "spawn"; arg = "maim -s | xclip -selection clipboard -t image/png"; },
+        { mod = ["super"]; key = "q"; action = "kill-client"; },
+        { mod = ["super", "shift"]; key = "q"; action = "quit"; },
+        { mod = ["super", "shift"]; key = "r"; action = "reload-config"; },
+
+        { mod = ["super"]; key = "j"; action = "focus-next"; },
+        { mod = ["super"]; key = "k"; action = "focus-prev"; },
+        { mod = ["super", "shift"]; key = "j"; action = "move-next"; },
+        { mod = ["super", "shift"]; key = "k"; action = "move-prev"; },
+
+        { mod = ["super"]; key = "h"; action = "resize-master"; arg = -50; },
+        { mod = ["super"]; key = "l"; action = "resize-master"; arg = 50; },
+        { mod = ["super"]; key = "i"; action = "inc-master"; },
+        { mod = ["super"]; key = "p"; action = "dec-master"; },
+
+        { mod = ["super"]; key = "a"; action = "toggle-gaps"; },
+        { mod = ["super"]; key = "f"; action = "toggle-fullscreen"; },
+        { mod = ["super"]; key = "Space"; action = "toggle-floating"; },
+
+        { mod = ["super"]; key = "comma"; action = "focus-monitor"; arg = -1; },
+        { mod = ["super"]; key = "period"; action = "focus-monitor"; arg = 1; },
+        { mod = ["super", "shift"]; key = "comma"; action = "send-to-monitor"; arg = -1; },
+        { mod = ["super", "shift"]; key = "period"; action = "send-to-monitor"; arg = 1; },
+
+        { mod = ["super"]; key = "n"; action = "cycle-layout"; },
+
+        ...tag_binds(["super"], "view-tag", 1, 9),
+        ...tag_binds(["super", "shift"], "move-to-tag", 1, 9),
+        ...tag_binds(["super", "ctrl"], "toggle-view-tag", 1, 9),
+        ...tag_binds(["super", "ctrl", "shift"], "toggle-tag", 1, 9),
+    ];
+
+    rules = [
+        { class = "Gimp"; floating = true; },
+        { class = "firefox"; tag = 2; },
+    ];
+
+    buttons = [
+        { context = "client-win"; mod = ["super"]; button = "button1"; action = "move-mouse"; },
+        { context = "client-win"; mod = ["super"]; button = "button2"; action = "toggle-floating"; },
+        { context = "client-win"; mod = ["super"]; button = "button3"; action = "resize-mouse"; },
+    ];
+}
