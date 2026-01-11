@@ -28,9 +28,9 @@ pub const Ram = struct {
         var lines = std.mem.splitScalar(u8, file_content, '\n');
         while (lines.next()) |line| {
             if (std.mem.startsWith(u8, line, "MemTotal:")) {
-                total = parseMemValue(line);
+                total = parse_mem_value(line);
             } else if (std.mem.startsWith(u8, line, "MemAvailable:")) {
-                available = parseMemValue(line);
+                available = parse_mem_value(line);
             }
         }
 
@@ -46,19 +46,19 @@ pub const Ram = struct {
         const total_str = std.fmt.bufPrint(&val_bufs[1], "{d:.1}", .{total_gb}) catch return buffer[0..0];
         const percent_str = std.fmt.bufPrint(&val_bufs[2], "{d:.0}", .{percent}) catch return buffer[0..0];
 
-        return format_util.substituteMulti(self.format, &.{ used_str, total_str, percent_str }, buffer);
+        return format_util.substitute_multi(self.format, &.{ used_str, total_str, percent_str }, buffer);
     }
 
     pub fn interval(self: *Ram) u64 {
         return self.interval_secs;
     }
 
-    pub fn getColor(self: *Ram) c_ulong {
+    pub fn get_color(self: *Ram) c_ulong {
         return self.color;
     }
 };
 
-fn parseMemValue(line: []const u8) u64 {
+fn parse_mem_value(line: []const u8) u64 {
     var iter = std.mem.tokenizeAny(u8, line, ": \tkB");
     _ = iter.next();
     if (iter.next()) |value_str| {

@@ -21,7 +21,7 @@ pub fn substitute(format: []const u8, value: []const u8, buffer: []u8) []const u
     return buffer[0..out_idx];
 }
 
-pub fn substituteMulti(format: []const u8, values: []const []const u8, buffer: []u8) []const u8 {
+pub fn substitute_multi(format: []const u8, values: []const []const u8, buffer: []u8) []const u8 {
     if (format.len == 0 and values.len > 0) {
         const len = @min(values[0].len, buffer.len);
         @memcpy(buffer[0..len], values[0][0..len]);

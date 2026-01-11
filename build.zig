@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("Xinerama");
     exe.linkSystemLibrary("Xft");
     exe.linkSystemLibrary("fontconfig");
+    exe.linkSystemLibrary("asound");
     exe.linkLibC();
 
     b.installArtifact(exe);

@@ -5,7 +5,7 @@ const Keybind = config_mod.Keybind;
 const Action = config_mod.Action;
 const Rule = config_mod.Rule;
 const Block = config_mod.Block;
-const BlockType = config_mod.BlockType;
+const Block_Type = config_mod.Block_Type;
 const MouseButton = config_mod.MouseButton;
 const ClickTarget = config_mod.ClickTarget;
 const MouseAction = config_mod.MouseAction;
@@ -365,6 +365,17 @@ fn apply_bar_config(root: ?*c.Goon_Value, cfg: *Config) void {
             block.format_discharging = get_string(c.goon_record_get(block_rec, "fmt_discharging"));
             block.format_full = get_string(c.goon_record_get(block_rec, "fmt_full"));
             block.battery_name = get_string(c.goon_record_get(block_rec, "device"));
+        } else if (std.mem.eql(u8, type_str, "cpu_temp")) {
+            block.block_type = .cpu_temp;
+            block.format = get_string(c.goon_record_get(block_rec, "fmt")) orelse "";
+            block.thermal_zone = get_string(c.goon_record_get(block_rec, "device"));
+        } else if (std.mem.eql(u8, type_str, "volume")) {
+            block.block_type = .volume;
+            block.format_muted = get_string(c.goon_record_get(block_rec, "fmt_muted"));
+            block.format_low = get_string(c.goon_record_get(block_rec, "fmt_low"));
+            block.format_medium = get_string(c.goon_record_get(block_rec, "fmt_medium"));
+            block.format_high = get_string(c.goon_record_get(block_rec, "fmt_high"));
+            block.mixer_name = get_string(c.goon_record_get(block_rec, "mixer"));
         } else {
             continue;
         }

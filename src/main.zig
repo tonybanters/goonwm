@@ -200,9 +200,9 @@ fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
                     created_bar.add_block(block);
                 }
             } else {
-                created_bar.add_block(blocks_mod.Block.initRam("", 5, 0x7aa2f7, true));
-                created_bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
-                created_bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
+                created_bar.add_block(blocks_mod.Block.init_ram("", 5, 0x7aa2f7, true));
+                created_bar.add_block(blocks_mod.Block.init_static(" | ", 0x666666, false));
+                created_bar.add_block(blocks_mod.Block.init_datetime("", "%H:%M", 1, 0x0db9d7, true));
             }
 
             if (last_bar) |prev| {
@@ -219,15 +219,32 @@ fn setup_bars(allocator: std.mem.Allocator, display: *Display) void {
 
 fn config_block_to_bar_block(cfg: config_mod.Block) blocks_mod.Block {
     return switch (cfg.block_type) {
-        .static => blocks_mod.Block.initStatic(cfg.format, cfg.color, cfg.underline),
-        .datetime => blocks_mod.Block.initDatetime(cfg.format, cfg.datetime_format orelse "%H:%M", cfg.interval, cfg.color, cfg.underline),
-        .ram => blocks_mod.Block.initRam(cfg.format, cfg.interval, cfg.color, cfg.underline),
-        .shell => blocks_mod.Block.initShell(cfg.format, cfg.command orelse "", cfg.interval, cfg.color, cfg.underline),
-        .battery => blocks_mod.Block.initBattery(
+        .static => blocks_mod.Block.init_static(cfg.format, cfg.color, cfg.underline),
+        .datetime => blocks_mod.Block.init_datetime(cfg.format, cfg.datetime_format orelse "%H:%M", cfg.interval, cfg.color, cfg.underline),
+        .ram => blocks_mod.Block.init_ram(cfg.format, cfg.interval, cfg.color, cfg.underline),
+        .shell => blocks_mod.Block.init_shell(cfg.format, cfg.command orelse "", cfg.interval, cfg.color, cfg.underline),
+        .battery => blocks_mod.Block.init_battery(
             cfg.format_charging orelse "",
             cfg.format_discharging orelse "",
             cfg.format_full orelse "",
             cfg.battery_name orelse "BAT0",
+            cfg.interval,
+            cfg.color,
+            cfg.underline,
+        ),
+        .cpu_temp => blocks_mod.Block.init_cpu_temp(
+            cfg.format,
+            cfg.thermal_zone orelse "thermal_zone0",
+            cfg.interval,
+            cfg.color,
+            cfg.underline,
+        ),
+        .volume => blocks_mod.Block.init_volume(
+            cfg.format_muted orelse "  muted",
+            cfg.format_low orelse "  {}%",
+            cfg.format_medium orelse "  {}%",
+            cfg.format_high orelse "  {}%",
+            cfg.mixer_name orelse "Master",
             cfg.interval,
             cfg.color,
             cfg.underline,
@@ -791,9 +808,9 @@ fn rebuild_bar_blocks() void {
                 bar.add_block(block);
             }
         } else {
-            bar.add_block(blocks_mod.Block.initRam("", 5, 0x7aa2f7, true));
-            bar.add_block(blocks_mod.Block.initStatic(" | ", 0x666666, false));
-            bar.add_block(blocks_mod.Block.initDatetime("", "%H:%M", 1, 0x0db9d7, true));
+            bar.add_block(blocks_mod.Block.init_ram("", 5, 0x7aa2f7, true));
+            bar.add_block(blocks_mod.Block.init_static(" | ", 0x666666, false));
+            bar.add_block(blocks_mod.Block.init_datetime("", "%H:%M", 1, 0x0db9d7, true));
         }
         current_bar = bar.next;
     }

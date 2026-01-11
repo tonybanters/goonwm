@@ -208,7 +208,7 @@ pub const Bar = struct {
         while (block_index > 0) {
             block_index -= 1;
             const block = &self.blocks.items[block_index];
-            const content = block.getContent();
+            const content = block.get_content();
             const content_width = self.text_width(display, content);
             block_x -= content_width;
             self.draw_text(display, block_x, @divTrunc(self.height + self.font_height, 2) - 4, content, block.color());

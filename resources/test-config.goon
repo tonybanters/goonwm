@@ -40,7 +40,19 @@ let separator = "#3c3c3c";
     };
 
     bar = [
-        { type = "ram"; fmt = " Ram: {}/{} GB"; interval = 5; color = light_blue; },
+        { type = "ram"; fmt = " Ram: {}/{} GB"; interval = 5; color = light_blue; },
+        { type = "static"; text = "│"; color = separator; underline = false; },
+        { type = "cpu_temp", fmt = "  {}°C", interval = 5, color = purple },
+        { type = "static"; text = "│"; color = separator; underline = false; },
+        { 
+            type = "volume"; 
+            fmt_muted = "  muted"; 
+            fmt_low = " {}%"; 
+            fmt_medium = " {}%"; 
+            fmt_high = " {}%"; 
+            interval = 1; 
+            color = green; 
+        },
         { type = "static"; text = "│"; color = separator; underline = false; },
         { type = "datetime"; fmt = "󰸗 {}"; strftime = "%a, %b %d - %-I:%M %P"; interval = 1; color = cyan; },
     ];

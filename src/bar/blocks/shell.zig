@@ -39,7 +39,7 @@ pub const Shell = struct {
         return self.interval_secs;
     }
 
-    pub fn getColor(self: *Shell) c_ulong {
+    pub fn get_color(self: *Shell) c_ulong {
         return self.color;
     }
 };

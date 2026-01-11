@@ -30,8 +30,8 @@ pub const Battery = struct {
     pub fn content(self: *Battery, buffer: []u8) []const u8 {
         var path_buf: [128]u8 = undefined;
 
-        const capacity = self.readBatteryFile(&path_buf, "capacity") orelse return buffer[0..0];
-        const status = self.readBatteryStatus(&path_buf) orelse return buffer[0..0];
+        const capacity = self.read_battery_file(&path_buf, "capacity") orelse return buffer[0..0];
+        const status = self.read_battery_status(&path_buf) orelse return buffer[0..0];
 
         const format = switch (status) {
             .charging => self.format_charging,
@@ -47,7 +47,7 @@ pub const Battery = struct {
 
     const Status = enum { charging, discharging, full };
 
-    fn readBatteryStatus(self: *Battery, path_buf: *[128]u8) ?Status {
+    fn read_battery_status(self: *Battery, path_buf: *[128]u8) ?Status {
         const path = std.fmt.bufPrint(path_buf, "/sys/class/power_supply/{s}/status", .{self.battery_name}) catch return null;
 
         const file = std.fs.openFileAbsolute(path, .{}) catch return null;
@@ -64,7 +64,7 @@ pub const Battery = struct {
         return .discharging;
     }
 
-    fn readBatteryFile(self: *Battery, path_buf: *[128]u8, file_name: []const u8) ?u8 {
+    fn read_battery_file(self: *Battery, path_buf: *[128]u8, file_name: []const u8) ?u8 {
         const path = std.fmt.bufPrint(path_buf, "/sys/class/power_supply/{s}/{s}", .{ self.battery_name, file_name }) catch return null;
 
         const file = std.fs.openFileAbsolute(path, .{}) catch return null;
@@ -81,7 +81,7 @@ pub const Battery = struct {
         return self.interval_secs;
     }
 
-    pub fn getColor(self: *Battery) c_ulong {
+    pub fn get_color(self: *Battery) c_ulong {
         return self.color;
     }
 };

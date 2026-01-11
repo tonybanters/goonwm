@@ -32,6 +32,7 @@
           pkgs.fontconfig
           pkgs.pkg-config
           pkgs.valgrind
+          pkgs.alsa-lib
         ];
         shellHook = ''
           export PS1="(goonwm-dev) $PS1"

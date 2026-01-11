@@ -45,12 +45,14 @@ pub const Rule = struct {
     monitor: i32,
 };
 
-pub const BlockType = enum {
+pub const Block_Type = enum {
     static,
     datetime,
     ram,
     shell,
     battery,
+    cpu_temp,
+    volume,
 };
 
 pub const ClickTarget = enum {
@@ -73,7 +75,7 @@ pub const MouseButton = struct {
 };
 
 pub const Block = struct {
-    block_type: BlockType,
+    block_type: Block_Type,
     format: []const u8,
     command: ?[]const u8 = null,
     interval: u32,
@@ -84,6 +86,12 @@ pub const Block = struct {
     format_discharging: ?[]const u8 = null,
     format_full: ?[]const u8 = null,
     battery_name: ?[]const u8 = null,
+    thermal_zone: ?[]const u8 = null,
+    format_muted: ?[]const u8 = null,
+    format_low: ?[]const u8 = null,
+    format_medium: ?[]const u8 = null,
+    format_high: ?[]const u8 = null,
+    mixer_name: ?[]const u8 = null,
 };
 
 pub const ColorScheme = struct {
