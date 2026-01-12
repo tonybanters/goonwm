@@ -15,6 +15,7 @@ fn get_layout_symbol(layout_index: u32) []const u8 {
             0 => conf.layout_tile_symbol,
             1 => conf.layout_monocle_symbol,
             2 => conf.layout_floating_symbol,
+            3 => "[S]",
             else => "[?]",
         };
     }
@@ -22,6 +23,7 @@ fn get_layout_symbol(layout_index: u32) []const u8 {
         0 => "[]=",
         1 => "[M]",
         2 => "><>",
+        3 => "[S]",
         else => "[?]",
     };
 }

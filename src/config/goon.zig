@@ -220,6 +220,8 @@ fn parse_action(name: []const u8) ?Action {
         .{ "volume-up", Action.volume_up },
         .{ "volume-down", Action.volume_down },
         .{ "volume-mute", Action.volume_mute },
+        .{ "scroll-left", Action.scroll_left },
+        .{ "scroll-right", Action.scroll_right },
     };
     inline for (action_map) |entry| {
         if (std.mem.eql(u8, name, entry[0])) {

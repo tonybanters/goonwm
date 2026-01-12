@@ -29,6 +29,8 @@ pub const Action = enum {
     volume_up,
     volume_down,
     volume_mute,
+    scroll_left,
+    scroll_right,
 };
 
 pub const Keybind = struct {

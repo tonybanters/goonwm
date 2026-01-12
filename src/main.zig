@@ -7,6 +7,8 @@ const monitor_mod = @import("monitor.zig");
 const tiling = @import("layouts/tiling.zig");
 const monocle = @import("layouts/monocle.zig");
 const floating = @import("layouts/floating.zig");
+const scrolling = @import("layouts/scrolling.zig");
+const animations = @import("animations.zig");
 const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
@@ -62,6 +64,9 @@ var numlock_mask: c_uint = 0;
 var config: config_mod.Config = undefined;
 var display_global: ?*Display = null;
 var config_path_global: ?[]const u8 = null;
+
+var scroll_animation: animations.Scroll_Animation = .{};
+var animation_config: animations.Animation_Config = .{ .duration_ms = 150, .easing = .ease_out };
 
 pub fn main() !void {
     const allocator = gpa.allocator();
@@ -279,10 +284,12 @@ fn setup_monitors(display: *Display) void {
                 mon.lt[0] = &tiling.layout;
                 mon.lt[1] = &monocle.layout;
                 mon.lt[2] = &floating.layout;
+                mon.lt[3] = &scrolling.layout;
                 for (0..10) |i| {
                     mon.pertag.ltidxs[i][0] = mon.lt[0];
                     mon.pertag.ltidxs[i][1] = mon.lt[1];
                     mon.pertag.ltidxs[i][2] = mon.lt[2];
+                    mon.pertag.ltidxs[i][3] = mon.lt[3];
                 }
 
                 if (prev_monitor) |prev| {
@@ -315,10 +322,12 @@ fn setup_monitors(display: *Display) void {
     mon.lt[0] = &tiling.layout;
     mon.lt[1] = &monocle.layout;
     mon.lt[2] = &floating.layout;
+    mon.lt[3] = &scrolling.layout;
     for (0..10) |i| {
         mon.pertag.ltidxs[i][0] = mon.lt[0];
         mon.pertag.ltidxs[i][1] = mon.lt[1];
         mon.pertag.ltidxs[i][2] = mon.lt[2];
+        mon.pertag.ltidxs[i][3] = mon.lt[3];
     }
     monitor_mod.monitors = mon;
     monitor_mod.selected_monitor = mon;
@@ -514,6 +523,8 @@ fn run_event_loop(display: *Display) void {
             handle_event(display, &event);
         }
 
+        tick_animations();
+
         var current_bar = bar_mod.bars;
         while (current_bar) |bar| {
             bar.update_blocks();
@@ -521,7 +532,8 @@ fn run_event_loop(display: *Display) void {
             current_bar = bar.next;
         }
 
-        _ = std.posix.poll(&fds, 1000) catch 0;
+        const poll_timeout: i32 = if (scroll_animation.is_active()) 16 else 1000;
+        _ = std.posix.poll(&fds, poll_timeout) catch 0;
     }
 }
 
@@ -641,6 +653,11 @@ fn manage(display: *Display, win: xlib.Window, window_attrs: *xlib.XWindowAttrib
         unfocus_client(display, selmon.sel, false);
     }
     monitor.sel = client;
+
+    if (is_scrolling_layout(monitor)) {
+        monitor.scroll_offset = 0;
+    }
+
     arrange(monitor);
     _ = xlib.XMapWindow(display.handle, win);
     focus(display, null);
@@ -767,6 +784,12 @@ fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, st
         },
         .volume_mute => {
             pulseaudio.toggle_mute();
+        },
+        .scroll_left => {
+            scroll_layout(-1);
+        },
+        .scroll_right => {
+            scroll_layout(1);
         },
     }
 }
@@ -1228,9 +1251,12 @@ fn setmfact(delta: f32) void {
 
 fn cycle_layout() void {
     const monitor = monitor_mod.selected_monitor orelse return;
-    const new_lt = (monitor.sel_lt + 1) % 3;
+    const new_lt = (monitor.sel_lt + 1) % 4;
     monitor.sel_lt = new_lt;
     monitor.pertag.sellts[monitor.pertag.curtag] = new_lt;
+    if (new_lt != 3) {
+        monitor.scroll_offset = 0;
+    }
     arrange(monitor);
     bar_mod.invalidate_bars();
     if (monitor.lt[monitor.sel_lt]) |layout| {
@@ -1591,12 +1617,38 @@ fn handle_unmap_notify(display: *Display, event: *xlib.XUnmapEvent) void {
 
 fn unmanage(display: *Display, client: *Client) void {
     const client_monitor = client.monitor;
+
+    var next_focus: ?*Client = null;
+    if (client_monitor) |monitor| {
+        if (monitor.sel == client and is_scrolling_layout(monitor)) {
+            next_focus = client.next;
+            if (next_focus == null) {
+                var prev: ?*Client = null;
+                var iter = monitor.clients;
+                while (iter) |c| {
+                    if (c == client) break;
+                    prev = c;
+                    iter = c.next;
+                }
+                next_focus = prev;
+            }
+        }
+    }
+
     client_mod.detach(client);
     client_mod.detach_stack(client);
 
     if (client_monitor) |monitor| {
         if (monitor.sel == client) {
-            monitor.sel = monitor.stack;
+            monitor.sel = if (next_focus) |nf| nf else monitor.stack;
+        }
+        if (is_scrolling_layout(monitor)) {
+            const target = if (monitor.sel) |sel| scrolling.get_target_scroll_for_window(monitor, sel) else 0;
+            if (target == 0) {
+                monitor.scroll_offset = scrolling.get_scroll_step(monitor);
+            } else {
+                monitor.scroll_offset = 0;
+            }
         }
         arrange(monitor);
     }
@@ -1813,6 +1865,13 @@ fn focus(display: *Display, target_client: ?*Client) void {
 
     const current_selmon = monitor_mod.selected_monitor orelse return;
     current_selmon.sel = focus_client;
+
+    if (focus_client) |client| {
+        if (is_scrolling_layout(current_selmon)) {
+            scroll_to_window(client, true);
+        }
+    }
+
     bar_mod.invalidate_bars();
 }
 
@@ -1856,6 +1915,55 @@ fn arrange(monitor: *Monitor) void {
     }
     if (display_global) |display| {
         restack(display, monitor);
+    }
+}
+
+fn tick_animations() void {
+    if (!scroll_animation.is_active()) return;
+
+    const monitor = monitor_mod.selected_monitor orelse return;
+    if (scroll_animation.update()) |new_offset| {
+        monitor.scroll_offset = new_offset;
+        arrange(monitor);
+    }
+}
+
+fn is_scrolling_layout(monitor: *Monitor) bool {
+    if (monitor.lt[monitor.sel_lt]) |layout| {
+        return layout.arrange_fn == scrolling.layout.arrange_fn;
+    }
+    return false;
+}
+
+fn scroll_layout(direction: i32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    if (!is_scrolling_layout(monitor)) return;
+
+    const scroll_step = scrolling.get_scroll_step(monitor);
+    const max_scroll = scrolling.get_max_scroll(monitor);
+
+    const current = if (scroll_animation.is_active())
+        scroll_animation.target()
+    else
+        monitor.scroll_offset;
+
+    var target = current + direction * scroll_step;
+    target = @max(0, @min(target, max_scroll));
+
+    scroll_animation.start(monitor.scroll_offset, target, animation_config);
+}
+
+fn scroll_to_window(client: *Client, animate: bool) void {
+    const monitor = client.monitor orelse return;
+    if (!is_scrolling_layout(monitor)) return;
+
+    const target = scrolling.get_target_scroll_for_window(monitor, client);
+
+    if (animate) {
+        scroll_animation.start(monitor.scroll_offset, target, animation_config);
+    } else {
+        monitor.scroll_offset = target;
+        arrange(monitor);
     }
 }
 
