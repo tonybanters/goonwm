@@ -117,6 +117,10 @@ pub fn adjust_volume(delta: i32) void {
         _ = pulse.pa_cvolume_dec(&vol, change);
     }
 
+    const avg = pulse.pa_cvolume_avg(&vol);
+    const pct = (avg * 100 + pulse.PA_VOLUME_NORM / 2) / pulse.PA_VOLUME_NORM;
+    global_volume = @intCast(@min(pct, 100));
+
     _ = pulse.pa_context_set_sink_volume_by_name(ctx, "@DEFAULT_SINK@", &vol, null, null);
 }
 
@@ -129,7 +133,8 @@ pub fn toggle_mute() void {
 
     if (pulse.pa_context_get_state(ctx) != pulse.PA_CONTEXT_READY) return;
 
-    const new_mute: c_int = if (global_muted) 0 else 1;
+    global_muted = !global_muted;
+    const new_mute: c_int = if (global_muted) 1 else 0;
     _ = pulse.pa_context_set_sink_mute_by_name(ctx, "@DEFAULT_SINK@", new_mute, null, null);
 }
 

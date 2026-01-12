@@ -778,12 +778,15 @@ fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, st
         .send_to_monitor => sendmon(display, int_arg),
         .volume_up => {
             pulseaudio.adjust_volume(5);
+            bar_mod.force_pulseaudio_update();
         },
         .volume_down => {
             pulseaudio.adjust_volume(-5);
+            bar_mod.force_pulseaudio_update();
         },
         .volume_mute => {
             pulseaudio.toggle_mute();
+            bar_mod.force_pulseaudio_update();
         },
         .scroll_left => {
             scroll_layout(-1);
