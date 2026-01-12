@@ -11,6 +11,7 @@ const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
 const goon = @import("config/goon.zig");
+const pulseaudio = @import("bar/blocks/pulseaudio.zig");
 
 const Display = display_mod.Display;
 const Client = client_mod.Client;
@@ -239,12 +240,11 @@ fn config_block_to_bar_block(cfg: config_mod.Block) blocks_mod.Block {
             cfg.color,
             cfg.underline,
         ),
-        .volume => blocks_mod.Block.init_volume(
+        .pulseaudio => blocks_mod.Block.init_pulseaudio(
             cfg.format_muted orelse "  muted",
             cfg.format_low orelse "  {}%",
             cfg.format_medium orelse "  {}%",
             cfg.format_high orelse "  {}%",
-            cfg.mixer_name orelse "Master",
             cfg.interval,
             cfg.color,
             cfg.underline,
@@ -759,6 +759,15 @@ fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, st
         },
         .focus_monitor => focusmon(display, int_arg),
         .send_to_monitor => sendmon(display, int_arg),
+        .volume_up => {
+            pulseaudio.adjust_volume(5);
+        },
+        .volume_down => {
+            pulseaudio.adjust_volume(-5);
+        },
+        .volume_mute => {
+            pulseaudio.toggle_mute();
+        },
     }
 }
 

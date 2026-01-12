@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("Xft");
     exe.linkSystemLibrary("fontconfig");
     exe.linkSystemLibrary("asound");
+    exe.linkSystemLibrary("pulse");
     exe.linkLibC();
 
     b.installArtifact(exe);

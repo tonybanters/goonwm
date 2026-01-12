@@ -6,7 +6,8 @@ pub const Ram = @import("ram.zig").Ram;
 pub const Shell = @import("shell.zig").Shell;
 pub const Battery = @import("battery.zig").Battery;
 pub const Cpu_Temp = @import("cpu_temp.zig").Cpu_Temp;
-pub const Volume = @import("volume.zig").Volume;
+pub const pulseaudio = @import("pulseaudio.zig");
+pub const Pulseaudio = pulseaudio.Pulseaudio;
 
 pub const Block_Type = enum {
     static,
@@ -15,7 +16,7 @@ pub const Block_Type = enum {
     shell,
     battery,
     cpu_temp,
-    volume,
+    pulseaudio,
 };
 
 pub const Block = struct {
@@ -32,7 +33,7 @@ pub const Block = struct {
         shell: Shell,
         battery: Battery,
         cpu_temp: Cpu_Temp,
-        volume: Volume,
+        pulseaudio: Pulseaudio,
     };
 
     pub fn init_static(text: []const u8, col: c_ulong, ul: bool) Block {
@@ -112,18 +113,17 @@ pub const Block = struct {
         };
     }
 
-    pub fn init_volume(
+    pub fn init_pulseaudio(
         format_muted: []const u8,
         format_low: []const u8,
         format_medium: []const u8,
         format_high: []const u8,
-        mixer_name: []const u8,
         interval_secs: u64,
         col: c_ulong,
         ul: bool,
     ) Block {
         return .{
-            .data = .{ .volume = Volume.init(format_muted, format_low, format_medium, format_high, mixer_name, interval_secs, col) },
+            .data = .{ .pulseaudio = Pulseaudio.init(format_muted, format_low, format_medium, format_high, interval_secs, col) },
             .last_update = 0,
             .cached_content = undefined,
             .cached_len = 0,
@@ -149,7 +149,7 @@ pub const Block = struct {
             .shell => |*s| s.content(&self.cached_content),
             .battery => |*b| b.content(&self.cached_content),
             .cpu_temp => |*c| c.content(&self.cached_content),
-            .volume => |*v| v.content(&self.cached_content),
+            .pulseaudio => |*p| p.content(&self.cached_content),
         };
 
         self.cached_len = result.len;
@@ -164,7 +164,7 @@ pub const Block = struct {
             .shell => |*s| s.interval(),
             .battery => |*b| b.interval(),
             .cpu_temp => |*c| c.interval(),
-            .volume => |*v| v.interval(),
+            .pulseaudio => |*p| p.interval(),
         };
     }
 
@@ -176,7 +176,7 @@ pub const Block = struct {
             .shell => |s| s.color,
             .battery => |b| b.color,
             .cpu_temp => |c| c.color,
-            .volume => |v| v.color,
+            .pulseaudio => |p| p.color,
         };
     }
 

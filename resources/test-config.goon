@@ -45,7 +45,7 @@ let separator = "#3c3c3c";
         { type = "cpu_temp", fmt = "  {}°C", interval = 5, color = purple },
         { type = "static"; text = "│"; color = separator; underline = false; },
         { 
-            type = "volume"; 
+            type = "pulseaudio"; 
             fmt_muted = "  muted"; 
             fmt_low = " {}%"; 
             fmt_medium = " {}%"; 

@@ -217,6 +217,9 @@ fn parse_action(name: []const u8) ?Action {
         .{ "toggle-tag", Action.toggle_tag },
         .{ "focus-monitor", Action.focus_monitor },
         .{ "send-to-monitor", Action.send_to_monitor },
+        .{ "volume-up", Action.volume_up },
+        .{ "volume-down", Action.volume_down },
+        .{ "volume-mute", Action.volume_mute },
     };
     inline for (action_map) |entry| {
         if (std.mem.eql(u8, name, entry[0])) {
@@ -369,13 +372,12 @@ fn apply_bar_config(root: ?*c.Goon_Value, cfg: *Config) void {
             block.block_type = .cpu_temp;
             block.format = get_string(c.goon_record_get(block_rec, "fmt")) orelse "";
             block.thermal_zone = get_string(c.goon_record_get(block_rec, "device"));
-        } else if (std.mem.eql(u8, type_str, "volume")) {
-            block.block_type = .volume;
+        } else if (std.mem.eql(u8, type_str, "pulseaudio")) {
+            block.block_type = .pulseaudio;
             block.format_muted = get_string(c.goon_record_get(block_rec, "fmt_muted"));
             block.format_low = get_string(c.goon_record_get(block_rec, "fmt_low"));
             block.format_medium = get_string(c.goon_record_get(block_rec, "fmt_medium"));
             block.format_high = get_string(c.goon_record_get(block_rec, "fmt_high"));
-            block.mixer_name = get_string(c.goon_record_get(block_rec, "mixer"));
         } else {
             continue;
         }

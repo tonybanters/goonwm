@@ -355,3 +355,16 @@ pub fn window_to_bar(win: xlib.Window) ?*Bar {
     }
     return null;
 }
+
+pub fn force_pulseaudio_update() void {
+    var current = bars;
+    while (current) |bar| {
+        for (bar.blocks.items) |*block| {
+            if (block.data == .pulseaudio) {
+                block.last_update = 0;
+            }
+        }
+        bar.invalidate();
+        current = bar.next;
+    }
+}

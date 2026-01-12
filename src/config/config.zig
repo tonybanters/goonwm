@@ -26,6 +26,9 @@ pub const Action = enum {
     toggle_tag,
     focus_monitor,
     send_to_monitor,
+    volume_up,
+    volume_down,
+    volume_mute,
 };
 
 pub const Keybind = struct {
@@ -52,7 +55,7 @@ pub const Block_Type = enum {
     shell,
     battery,
     cpu_temp,
-    volume,
+    pulseaudio,
 };
 
 pub const ClickTarget = enum {
