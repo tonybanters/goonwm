@@ -18,6 +18,7 @@ pub const Action = enum {
     toggle_fullscreen,
     toggle_gaps,
     cycle_layout,
+    set_layout,
     set_layout_tiling,
     set_layout_floating,
     view_tag,

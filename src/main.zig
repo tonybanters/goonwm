@@ -756,6 +756,7 @@ fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, st
         .toggle_fullscreen => toggle_fullscreen(display),
         .toggle_gaps => toggle_gaps(),
         .cycle_layout => cycle_layout(),
+        .set_layout => set_layout(str_arg),
         .set_layout_tiling => {},
         .set_layout_floating => {},
         .view_tag => {
@@ -1264,6 +1265,35 @@ fn cycle_layout() void {
     bar_mod.invalidate_bars();
     if (monitor.lt[monitor.sel_lt]) |layout| {
         std.debug.print("cycle_layout: {s}\n", .{layout.symbol});
+    }
+}
+
+fn set_layout(layout_name: ?[]const u8) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const name = layout_name orelse return;
+
+    const new_lt: u32 = if (std.mem.eql(u8, name, "tiling") or std.mem.eql(u8, name, "[]="))
+        0
+    else if (std.mem.eql(u8, name, "monocle") or std.mem.eql(u8, name, "[M]"))
+        1
+    else if (std.mem.eql(u8, name, "floating") or std.mem.eql(u8, name, "><>"))
+        2
+    else if (std.mem.eql(u8, name, "scrolling") or std.mem.eql(u8, name, "[S]"))
+        3
+    else {
+        std.debug.print("set_layout: unknown layout '{s}'\n", .{name});
+        return;
+    };
+
+    monitor.sel_lt = new_lt;
+    monitor.pertag.sellts[monitor.pertag.curtag] = new_lt;
+    if (new_lt != 3) {
+        monitor.scroll_offset = 0;
+    }
+    arrange(monitor);
+    bar_mod.invalidate_bars();
+    if (monitor.lt[monitor.sel_lt]) |layout| {
+        std.debug.print("set_layout: {s}\n", .{layout.symbol});
     }
 }
 

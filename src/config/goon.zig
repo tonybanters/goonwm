@@ -209,6 +209,7 @@ fn parse_action(name: []const u8) ?Action {
         .{ "toggle-fullscreen", Action.toggle_fullscreen },
         .{ "toggle-gaps", Action.toggle_gaps },
         .{ "cycle-layout", Action.cycle_layout },
+        .{ "set-layout", Action.set_layout },
         .{ "set-layout-tiling", Action.set_layout_tiling },
         .{ "set-layout-floating", Action.set_layout_floating },
         .{ "view-tag", Action.view_tag },

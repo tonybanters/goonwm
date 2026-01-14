@@ -75,6 +75,8 @@ let separator = "#3c3c3c";
         { mod = ["mod1"]; key = "f"; action = "toggle-fullscreen"; },
         { mod = ["mod1"]; key = "Space"; action = "toggle-floating"; },
 
+        { mod = ["mod1"]; key = "s"; action = "set-layout", arg="scrolling"; },
+
         ...tag_binds(["mod1"], "view-tag", 1, 9),
         ...tag_binds(["mod1", "shift"], "move-to-tag", 1, 9),
     ];
