@@ -39,14 +39,29 @@ pub fn scroll(monitor: *Monitor) void {
     var index: u32 = 0;
     current = client_mod.next_tiled(monitor.clients);
     while (current) |client| : (current = client_mod.next_tiled(client.next)) {
-        tiling.resize(
-            client,
-            x_pos,
-            y_pos,
-            window_width - 2 * client.border_width,
-            height - 2 * client.border_width,
-            false,
-        );
+        const window_right = x_pos + window_width;
+        const screen_left = monitor.win_x;
+        const screen_right = monitor.win_x + monitor.win_w;
+        const is_visible = window_right > screen_left and x_pos < screen_right;
+
+        if (is_visible) {
+            tiling.resize(
+                client,
+                x_pos,
+                y_pos,
+                window_width - 2 * client.border_width,
+                height - 2 * client.border_width,
+                false,
+            );
+        } else {
+            tiling.resize_client(
+                client,
+                -2 * window_width,
+                y_pos,
+                window_width - 2 * client.border_width,
+                height - 2 * client.border_width,
+            );
+        }
         x_pos += window_width + gap_inner_v;
         index += 1;
     }

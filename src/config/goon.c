@@ -525,6 +525,27 @@ Goon_Value *goon_record_get(Goon_Value *record, const char *key) {
     return NULL;
 }
 
+static void goon_record_set_path(Goon_Ctx *ctx, Goon_Value *record, char **path, size_t path_len, Goon_Value *value) {
+    if (path_len == 0) return;
+
+    if (path_len == 1) {
+        goon_record_set(ctx, record, path[0], value);
+        return;
+    }
+
+    Goon_Value *existing = goon_record_get(record, path[0]);
+    Goon_Value *intermediate;
+
+    if (existing && existing->type == GOON_RECORD) {
+        intermediate = existing;
+    } else {
+        intermediate = goon_record(ctx);
+        goon_record_set(ctx, record, path[0], intermediate);
+    }
+
+    goon_record_set_path(ctx, intermediate, path + 1, path_len - 1, value);
+}
+
 Goon_Record_Field *goon_record_fields(Goon_Value *record) {
     if (!record || record->type != GOON_RECORD) return NULL;
     return record->data.record.fields;
@@ -709,27 +730,59 @@ static Goon_Value *parse_record(Parser *p) {
             return NULL;
         }
 
-        char *key = strdup(p->lex->current.data.string);
-        if (!lexer_next(p->lex)) { free(key); return NULL; }
+        char *path[32];
+        size_t path_len = 0;
+
+        path[path_len++] = strdup(p->lex->current.data.string);
+        if (!lexer_next(p->lex)) { free(path[0]); return NULL; }
+
+        while (p->lex->current.type == TOK_DOT && path_len < 32) {
+            if (!lexer_next(p->lex)) {
+                for (size_t i = 0; i < path_len; i++) free(path[i]);
+                return NULL;
+            }
+            if (p->lex->current.type != TOK_IDENT) {
+                lexer_set_error(p->lex, "expected field name after .");
+                for (size_t i = 0; i < path_len; i++) free(path[i]);
+                return NULL;
+            }
+            path[path_len++] = strdup(p->lex->current.data.string);
+            if (!lexer_next(p->lex)) {
+                for (size_t i = 0; i < path_len; i++) free(path[i]);
+                return NULL;
+            }
+        }
 
         if (p->lex->current.type == TOK_COLON) {
-            if (!lexer_next(p->lex)) { free(key); return NULL; }
-            if (!lexer_next(p->lex)) { free(key); return NULL; }
+            if (!lexer_next(p->lex)) {
+                for (size_t i = 0; i < path_len; i++) free(path[i]);
+                return NULL;
+            }
+            if (!lexer_next(p->lex)) {
+                for (size_t i = 0; i < path_len; i++) free(path[i]);
+                return NULL;
+            }
         }
 
         if (p->lex->current.type != TOK_EQUALS) {
             lexer_set_error(p->lex, "expected = after field name");
-            free(key);
+            for (size_t i = 0; i < path_len; i++) free(path[i]);
             return NULL;
         }
 
-        if (!lexer_next(p->lex)) { free(key); return NULL; }
+        if (!lexer_next(p->lex)) {
+            for (size_t i = 0; i < path_len; i++) free(path[i]);
+            return NULL;
+        }
 
         Goon_Value *value = parse_expr(p);
-        if (!value) { free(key); return NULL; }
+        if (!value) {
+            for (size_t i = 0; i < path_len; i++) free(path[i]);
+            return NULL;
+        }
 
-        goon_record_set(p->ctx, record, key, value);
-        free(key);
+        goon_record_set_path(p->ctx, record, path, path_len, value);
+        for (size_t i = 0; i < path_len; i++) free(path[i]);
 
         if (p->lex->current.type == TOK_SEMICOLON) {
             if (!lexer_next(p->lex)) return NULL;
