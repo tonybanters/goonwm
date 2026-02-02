@@ -13,12 +13,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    exe.addIncludePath(b.path("src/config"));
-    exe.addCSourceFile(.{
-        .file = b.path("src/config/goon.c"),
-        .flags = &.{"-std=c99"},
-    });
-
+    exe.linkSystemLibrary("lua");
     exe.linkSystemLibrary("X11");
     exe.linkSystemLibrary("Xinerama");
     exe.linkSystemLibrary("Xft");
@@ -71,7 +66,7 @@ fn add_xephyr_run(b: *std.Build, exe: *std.Build.Step.Compile, multimon: bool) *
     const run_wm = b.addRunArtifact(exe);
     run_wm.step.dependOn(&setup.step);
     run_wm.setEnvironmentVariable("DISPLAY", ":2");
-    run_wm.addArgs(&.{ "-c", "resources/test-config.goon" });
+    run_wm.addArgs(&.{ "-c", "resources/config.lua" });
 
     return run_wm;
 }

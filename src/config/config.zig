@@ -22,6 +22,10 @@ pub const Action = enum {
     set_layout_tiling,
     set_layout_floating,
     view_tag,
+    view_next_tag,
+    view_prev_tag,
+    view_next_nonempty_tag,
+    view_prev_nonempty_tag,
     move_to_tag,
     toggle_view_tag,
     toggle_tag,
@@ -61,23 +65,23 @@ pub const Block_Type = enum {
     pulseaudio,
 };
 
-pub const ClickTarget = enum {
+pub const Click_Target = enum {
     client_win,
     root_win,
     tag_bar,
 };
 
-pub const MouseAction = enum {
+pub const Mouse_Action = enum {
     move_mouse,
     resize_mouse,
     toggle_floating,
 };
 
-pub const MouseButton = struct {
-    click: ClickTarget,
+pub const Mouse_Button = struct {
+    click: Click_Target,
     mod_mask: u32,
     button: u32,
-    action: MouseAction,
+    action: Mouse_Action,
 };
 
 pub const Block = struct {
@@ -100,7 +104,7 @@ pub const Block = struct {
     mixer_name: ?[]const u8 = null,
 };
 
-pub const ColorScheme = struct {
+pub const Color_Scheme = struct {
     fg: u32 = 0xbbbbbb,
     bg: u32 = 0x1a1b26,
     border: u32 = 0x444444,
@@ -117,26 +121,32 @@ pub const Config = struct {
     border_focused: u32 = 0x6dade3,
     border_unfocused: u32 = 0x444444,
 
+    gaps_enabled: bool = true,
+    smartgaps_enabled: bool = false,
     gap_inner_h: i32 = 5,
     gap_inner_v: i32 = 5,
     gap_outer_h: i32 = 5,
     gap_outer_v: i32 = 5,
 
+    modkey: u32 = (1 << 6),
     auto_tile: bool = false,
+    tag_back_and_forth: bool = false,
+    hide_vacant_tags: bool = false,
 
     layout_tile_symbol: []const u8 = "[]=",
     layout_monocle_symbol: []const u8 = "[M]",
     layout_floating_symbol: []const u8 = "><>",
 
-    scheme_normal: ColorScheme = .{ .fg = 0xbbbbbb, .bg = 0x1a1b26, .border = 0x444444 },
-    scheme_selected: ColorScheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0xad8ee6 },
-    scheme_occupied: ColorScheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0x0db9d7 },
-    scheme_urgent: ColorScheme = .{ .fg = 0xf7768e, .bg = 0x1a1b26, .border = 0xf7768e },
+    scheme_normal: Color_Scheme = .{ .fg = 0xbbbbbb, .bg = 0x1a1b26, .border = 0x444444 },
+    scheme_selected: Color_Scheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0xad8ee6 },
+    scheme_occupied: Color_Scheme = .{ .fg = 0x0db9d7, .bg = 0x1a1b26, .border = 0x0db9d7 },
+    scheme_urgent: Color_Scheme = .{ .fg = 0xf7768e, .bg = 0x1a1b26, .border = 0xf7768e },
 
     keybinds: std.ArrayListUnmanaged(Keybind) = .{},
     rules: std.ArrayListUnmanaged(Rule) = .{},
     blocks: std.ArrayListUnmanaged(Block) = .{},
-    buttons: std.ArrayListUnmanaged(MouseButton) = .{},
+    buttons: std.ArrayListUnmanaged(Mouse_Button) = .{},
+    autostart: std.ArrayListUnmanaged([]const u8) = .{},
 
     pub fn init(allocator: std.mem.Allocator) Config {
         return Config{
@@ -149,6 +159,7 @@ pub const Config = struct {
         self.rules.deinit(self.allocator);
         self.blocks.deinit(self.allocator);
         self.buttons.deinit(self.allocator);
+        self.autostart.deinit(self.allocator);
     }
 
     pub fn add_keybind(self: *Config, keybind: Keybind) !void {
@@ -163,8 +174,12 @@ pub const Config = struct {
         try self.blocks.append(self.allocator, block);
     }
 
-    pub fn add_button(self: *Config, button: MouseButton) !void {
+    pub fn add_button(self: *Config, button: Mouse_Button) !void {
         try self.buttons.append(self.allocator, button);
+    }
+
+    pub fn add_autostart(self: *Config, cmd: []const u8) !void {
+        try self.autostart.append(self.allocator, cmd);
     }
 };
 

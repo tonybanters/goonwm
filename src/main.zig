@@ -12,7 +12,7 @@ const animations = @import("animations.zig");
 const bar_mod = @import("bar/bar.zig");
 const blocks_mod = @import("bar/blocks/blocks.zig");
 const config_mod = @import("config/config.zig");
-const goon = @import("config/goon.zig");
+const lua = @import("config/lua.zig");
 const pulseaudio = @import("bar/blocks/pulseaudio.zig");
 
 const Display = display_mod.Display;
@@ -81,7 +81,7 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "-c") or std.mem.eql(u8, arg, "--config")) {
             config_path = args.next();
         } else if (std.mem.eql(u8, arg, "-h") or std.mem.eql(u8, arg, "--help")) {
-            std.debug.print("usage: goonwm [-c config.goon]\n", .{});
+            std.debug.print("usage: goonwm [-c config.lua]\n", .{});
             return;
         }
     }
@@ -90,18 +90,18 @@ pub fn main() !void {
     defer config.deinit();
     config_mod.set_config(&config);
 
-    if (goon.init(&config)) {
+    if (lua.init(&config)) {
         const loaded = if (config_path) |path|
-            goon.load_file(path)
+            lua.load_file(path)
         else
-            goon.load_config();
+            lua.load_config();
 
         if (loaded) {
             config_path_global = config_path;
             if (config_path) |path| {
                 std.debug.print("loaded config from {s}\n", .{path});
             } else {
-                std.debug.print("loaded config from ~/.config/goonwm/config.goon\n", .{});
+                std.debug.print("loaded config from ~/.config/goonwm/config.lua\n", .{});
             }
             apply_config_values();
         } else {
@@ -109,7 +109,7 @@ pub fn main() !void {
             setup_default_keybinds();
         }
     } else {
-        std.debug.print("failed to init goon, using defaults\n", .{});
+        std.debug.print("failed to init lua, using defaults\n", .{});
         setup_default_keybinds();
     }
 
@@ -147,7 +147,7 @@ pub fn main() !void {
     std.debug.print("entering event loop\n", .{});
     run_event_loop(&display);
 
-    goon.deinit();
+    lua.deinit();
     std.debug.print("goonwm exiting\n", .{});
 }
 
@@ -763,6 +763,10 @@ fn execute_action(display: *Display, action: config_mod.Action, int_arg: i32, st
             const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
             view(display, tag_mask);
         },
+        .view_next_tag => view_adjacent_tag(display, 1),
+        .view_prev_tag => view_adjacent_tag(display, -1),
+        .view_next_nonempty_tag => view_adjacent_nonempty_tag(display, 1),
+        .view_prev_nonempty_tag => view_adjacent_nonempty_tag(display, -1),
         .move_to_tag => {
             const tag_mask: u32 = @as(u32, 1) << @intCast(int_arg);
             tag_client(display, tag_mask);
@@ -807,19 +811,19 @@ fn reload_config(display: *Display) void {
     config.rules.clearRetainingCapacity();
     config.blocks.clearRetainingCapacity();
 
-    goon.deinit();
-    _ = goon.init(&config);
+    lua.deinit();
+    _ = lua.init(&config);
 
     const loaded = if (config_path_global) |path|
-        goon.load_file(path)
+        lua.load_file(path)
     else
-        goon.load_config();
+        lua.load_config();
 
     if (loaded) {
         if (config_path_global) |path| {
             std.debug.print("reloaded config from {s}\n", .{path});
         } else {
-            std.debug.print("reloaded config from ~/.config/goonwm/config.goon\n", .{});
+            std.debug.print("reloaded config from ~/.config/goonwm/config.lua\n", .{});
         }
         apply_config_values();
     } else {
@@ -1131,6 +1135,49 @@ fn view(display: *Display, tag_mask: u32) void {
     arrange(monitor);
     bar_mod.invalidate_bars();
     std.debug.print("view: tag_mask={d}\n", .{monitor.tagset[monitor.sel_tags]});
+}
+
+fn view_adjacent_tag(display: *Display, direction: i32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const current_tag = monitor.pertag.curtag;
+    var new_tag: i32 = @intCast(current_tag);
+
+    new_tag += direction;
+    if (new_tag < 1) new_tag = 9;
+    if (new_tag > 9) new_tag = 1;
+
+    const tag_mask: u32 = @as(u32, 1) << @intCast(new_tag - 1);
+    view(display, tag_mask);
+}
+
+fn view_adjacent_nonempty_tag(display: *Display, direction: i32) void {
+    const monitor = monitor_mod.selected_monitor orelse return;
+    const current_tag = monitor.pertag.curtag;
+    var new_tag: i32 = @intCast(current_tag);
+
+    var attempts: i32 = 0;
+    while (attempts < 9) : (attempts += 1) {
+        new_tag += direction;
+        if (new_tag < 1) new_tag = 9;
+        if (new_tag > 9) new_tag = 1;
+
+        const tag_mask: u32 = @as(u32, 1) << @intCast(new_tag - 1);
+        if (has_clients_on_tag(monitor, tag_mask)) {
+            view(display, tag_mask);
+            return;
+        }
+    }
+}
+
+fn has_clients_on_tag(monitor: *monitor_mod.Monitor, tag_mask: u32) bool {
+    var client = monitor.clients;
+    while (client) |c| {
+        if ((c.tags & tag_mask) != 0) {
+            return true;
+        }
+        client = c.next;
+    }
+    return false;
 }
 
 fn tag_client(display: *Display, tag_mask: u32) void {

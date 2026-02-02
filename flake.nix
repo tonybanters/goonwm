@@ -34,6 +34,7 @@
           pkgs.valgrind
           pkgs.alsa-lib
           pkgs.libpulseaudio
+          pkgs.lua5_4
         ];
         shellHook = ''
           export PS1="(goonwm-dev) $PS1"

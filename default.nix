@@ -6,6 +6,7 @@
   freetype,
   fontconfig,
   pkg-config,
+  lua5_4,
 }:
 stdenv.mkDerivation {
   pname = "goonwm";
@@ -22,6 +23,7 @@ stdenv.mkDerivation {
     xorg.libXrender
     freetype
     fontconfig
+    lua5_4
   ];
 
   buildPhase = ''
